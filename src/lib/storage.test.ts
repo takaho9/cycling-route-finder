@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
   addRide,
+  clearDeparture,
+  isDepartureExpired,
+  loadDeparture,
+  longestStreak,
+  previousDateKey,
+  rideDateKey,
+  rideToday,
+  saveDeparture,
+  shouldAskReturn,
   computeBestStreak,
   hasRideOn,
   loadFlag,
@@ -87,7 +96,7 @@ describe('persistence', () => {
     expect(loadSettings()).toEqual(DEFAULT_SETTINGS)
   })
   it('rides', () => {
-    addRide({ placeId: 'osm:node/1', name: '公園', minutes: 30 }, undefined, new Date(2026, 9, 4))
+    addRide({ placeId: 'osm:node/1', name: '公園', minutes: 30 }, undefined, new Date(2026, 9, 4, 12))
     addRide({ placeId: 'osm:node/2', name: '珈琲', minutes: 45, date: '2026-10-03' })
     expect(loadRides()).toEqual([
       { placeId: 'osm:node/1', name: '公園', minutes: 30, date: '2026-10-04' },
@@ -158,5 +167,45 @@ describe('habit helpers', () => {
     expect(loadFlag('x')).toBe(false)
     setFlag('x')
     expect(loadFlag('x')).toBe(true)
+  })
+})
+
+describe('day boundary (0-4am counts as the previous day)', () => {
+  it('rideDateKey', () => {
+    expect(rideDateKey(new Date(2026, 9, 4, 3, 59))).toBe('2026-10-03')
+    expect(rideDateKey(new Date(2026, 9, 4, 4, 0))).toBe('2026-10-04')
+    expect(rideDateKey(new Date(2026, 9, 1, 1, 0))).toBe('2026-09-30')
+  })
+  it('rideToday / previousDateKey', () => {
+    expect(toDateKey(rideToday(new Date(2026, 9, 4, 2)))).toBe('2026-10-03')
+    expect(previousDateKey('2026-10-01')).toBe('2026-09-30')
+  })
+  it('addRide uses the ride date', () => {
+    addRide({ placeId: 'a', name: 'A', minutes: 30 }, undefined, new Date(2026, 9, 4, 1, 30))
+    expect(loadRides()[0].date).toBe('2026-10-03')
+  })
+  it('runs in Asia/Tokyo', () => {
+    expect(new Date('2026-10-03T15:30:00Z').getHours()).toBe(0)
+  })
+  it('longestStreak alias', () => {
+    expect(longestStreak(rides('2026-10-01', '2026-10-02'))).toBe(2)
+  })
+})
+
+describe('departure → "行ってきた？"', () => {
+  const dep = { placeId: 'p', name: '代々木公園', at: new Date(2026, 9, 4, 10, 0).toISOString(), plannedMin: 60 }
+  it('asks between planned×0.5 and 12h', () => {
+    expect(shouldAskReturn(dep, new Date(2026, 9, 4, 10, 29))).toBe(false)
+    expect(shouldAskReturn(dep, new Date(2026, 9, 4, 10, 30))).toBe(true)
+    expect(shouldAskReturn(dep, new Date(2026, 9, 4, 22, 0))).toBe(true)
+    expect(shouldAskReturn(dep, new Date(2026, 9, 4, 22, 1))).toBe(false)
+    expect(isDepartureExpired(dep, new Date(2026, 9, 4, 22, 1))).toBe(true)
+    expect(shouldAskReturn(null)).toBe(false)
+  })
+  it('persists and clears', () => {
+    saveDeparture(dep)
+    expect(loadDeparture()).toEqual(dep)
+    clearDeparture()
+    expect(loadDeparture()).toBeNull()
   })
 })

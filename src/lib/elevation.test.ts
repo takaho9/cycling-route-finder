@@ -26,7 +26,7 @@ describe('summarizeElevation', () => {
   })
   it('computes one-way / round-trip gain, G = max(up, down), R = G / one-way km', () => {
     // 2 km, 4 segments of 500 m: +10, +20, -5, +5
-    const s = summarizeElevation([0, 10, 30, 25, 30], 2)
+    const s = summarizeElevation([0, 10, 30, 25, 30], 2, { noiseThresholdM: 0 })
     expect(s.gainOneWayM).toBe(35)
     expect(s.lossOneWayM).toBe(5)
     expect(s.gainRoundTripM).toBe(40)

@@ -2,11 +2,44 @@ export const DEFAULT_TIMEOUT_MS = 15_000
 
 export class HttpError extends Error {
   readonly status: number
-  constructor(status: number, url: string) {
+  /** Retry-After ヘッダ（秒）。無ければ undefined */
+  readonly retryAfterSec?: number
+  constructor(status: number, url: string, retryAfterSec?: number) {
     super(`HTTP ${status} for ${url}`)
     this.name = 'HttpError'
     this.status = status
+    this.retryAfterSec = retryAfterSec
   }
+}
+
+/** Retry-After（秒 or HTTP-date）を秒に */
+export function parseRetryAfter(v: string | null, now = Date.now()): number | undefined {
+  if (!v) return undefined
+  if (/^\d+$/.test(v.trim())) return Number(v.trim())
+  const t = Date.parse(v)
+  return Number.isNaN(t) ? undefined : Math.max(0, Math.round((t - now) / 1000))
+}
+
+export function abortError(): Error {
+  const e = new Error('The operation was aborted')
+  e.name = 'AbortError'
+  return e
+}
+
+/** ms 待つ（abort されたら AbortError） */
+export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(abortError())
+    const t = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    const onAbort = () => {
+      clearTimeout(t)
+      reject(abortError())
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
 }
 
 export class TimeoutError extends Error {
@@ -23,12 +56,6 @@ export interface RequestOptions {
 
 export function isAbortError(e: unknown): boolean {
   return typeof e === 'object' && e !== null && (e as { name?: unknown }).name === 'AbortError'
-}
-
-function abortError(): Error {
-  const e = new Error('The operation was aborted')
-  e.name = 'AbortError'
-  return e
 }
 
 /**
@@ -53,7 +80,7 @@ export async function fetchWithTimeout(
   signal?.addEventListener('abort', onAbort, { once: true })
   try {
     const res = await fetch(url, { ...init, signal: controller.signal })
-    if (!res.ok) throw new HttpError(res.status, url)
+    if (!res.ok) throw new HttpError(res.status, url, parseRetryAfter(res.headers.get('Retry-After')))
     return res
   } catch (e) {
     if (timedOut) throw new TimeoutError(timeoutMs)

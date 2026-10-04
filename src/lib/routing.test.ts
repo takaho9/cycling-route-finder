@@ -10,19 +10,19 @@ beforeEach(() => clearRouteCache())
 describe('routing', () => {
   it('builds OSRM URL with lng,lat order; defaults to the bike server', () => {
     expect(buildOsrmUrl(A, B)).toBe(
-      'https://routing.openstreetmap.de/routed-bike/route/v1/bike/139.767125,35.681236;139.700258,35.690921?overview=simplified&geometries=geojson',
+      'https://routing.openstreetmap.de/routed-bike/route/v1/bike/139.7671,35.6812;139.7003,35.6909?overview=simplified&geometries=geojson',
     )
   })
 
-  it('falls back routed-bike → project-osrm → straight', async () => {
+  it('falls back routed-bike(bike) → routed-bike(driving) → straight', async () => {
     const f = mockFetch((url) =>
-      url.startsWith('https://routing.openstreetmap.de')
+      url.includes('/route/v1/bike/')
         ? jsonResponse({}, 502)
         : jsonResponse({ code: 'Ok', routes: [{ distance: 8000, duration: 1, geometry: { coordinates: [[139.767125, 35.681236], [139.700258, 35.690921]] } }] }),
     )
     const r = await fetchRoute(A, B)
     expect(r).toMatchObject({ source: 'osrm', distanceKm: 8 })
-    expect(f.mock.calls.map(([u]) => new URL(String(u)).host)).toEqual(['routing.openstreetmap.de', 'router.project-osrm.org'])
+    expect(f.mock.calls.map(([u]) => new URL(String(u)).pathname.split('/')[4])).toEqual(['bike', 'driving'])
   })
 
   it('parses OSRM geometry and distance', async () => {

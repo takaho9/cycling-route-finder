@@ -3,7 +3,8 @@ import { bearingDeg, destinationPoint, haversineKm, interpolateLine } from '../g
 import { hashString, mulberry32, pick } from '../random'
 import type { Category, LatLng, Place, PlaceProvider } from '../types'
 
-export const MOCK_COUNT = 36
+/** 検索範囲（全時間帯）全体に生成する件数。距離は対数一様なので各時間帯にほぼ均等に入る */
+export const MOCK_COUNT = 180
 
 const PLACE_WORDS = [
   '桜ヶ丘', '若葉', '緑町', '富士見', '青葉台', '東山', '宮前', '鶴見', '柏木', '大宮', '松原', '梅ヶ丘',
@@ -63,7 +64,7 @@ export function mockElevationProfile(origin: LatLng, dest: LatLng, bonusM = 0, s
 
 /** 中心座標・距離帯から決定的に候補を生成 */
 export function generateMockPlaces(center: LatLng, minKm: number, maxKm: number, count = MOCK_COUNT): Place[] {
-  const seed = hashString(`${center.lat.toFixed(3)},${center.lng.toFixed(3)},${minKm.toFixed(2)},${maxKm.toFixed(2)}`)
+  const seed = hashString(`${center.lat.toFixed(3)},${center.lng.toFixed(3)},${maxKm.toFixed(1)}`)
   const rng = mulberry32(seed)
   const usedNames = new Set<string>()
   const places: Place[] = []
@@ -71,10 +72,11 @@ export function generateMockPlaces(center: LatLng, minKm: number, maxKm: number,
   const hi = Math.max(minKm, maxKm)
   for (let i = 0; i < count; i++) {
     const category = MOCK_CATEGORIES[i % MOCK_CATEGORIES.length]
-    // 方位を均等に分散 + ゆらぎ
-    const bearingSeed = (i * 360) / count + (rng() - 0.5) * (360 / count)
-    // ドーナツ内で面積一様
-    const dist = Math.sqrt(lo * lo + rng() * (hi * hi - lo * lo))
+    // 方位を分散（黄金角で回して距離帯ごとにも偏らない）+ ゆらぎ
+    const bearingSeed = (i * 137.508 + (rng() - 0.5) * 20) % 360
+    // 対数一様: 短い時間帯（狭いドーナツ）にも十分な候補が入るように
+    const l = Math.max(lo, 0.2)
+    const dist = l * Math.pow(hi / l, rng())
     const pos = destinationPoint(center, bearingSeed, dist)
     let name = ''
     for (let tries = 0; tries < 20; tries++) {

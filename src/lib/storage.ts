@@ -9,6 +9,7 @@ const KEYS = {
   recentOrigins: `${PREFIX}recentOrigins`,
   lastResult: `${PREFIX}lastResult`,
   flags: `${PREFIX}flags`,
+  departure: `${PREFIX}departure`,
 } as const
 
 /** localStorage を安全に取得（プライベートモード等で例外になりうる） */
@@ -92,6 +93,25 @@ export function toDateKey(d: Date): string {
   return `${y}-${m}-${day}`
 }
 
+/** 深夜 0〜4 時のライドは前日扱い（BACKLOG G2/A7） */
+export const DAY_BOUNDARY_HOUR = 4
+
+/** ライドの記録日（0〜4 時は前日） */
+export function rideDateKey(d: Date): string {
+  return toDateKey(new Date(d.getTime() - DAY_BOUNDARY_HOUR * 60 * 60 * 1000))
+}
+
+/** 記録日の前日（「昨日の分として記録」用） */
+export function previousDateKey(key: string): string {
+  const d = parseDateKey(key)
+  return d ? toDateKey(addDays(d, -1)) : key
+}
+
+/** 「今日」（記録日基準。0〜4 時は前日）を Date で */
+export function rideToday(now: Date = new Date()): Date {
+  return parseDateKey(rideDateKey(now))!
+}
+
 function parseDateKey(key: string): Date | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key)
   if (!m) return null
@@ -118,7 +138,7 @@ export function addRide(
   storage?: Storage | null,
   now: Date = new Date(),
 ): RideRecord[] {
-  const rides = [...loadRides(storage), { ...ride, date: ride.date ?? toDateKey(now) }]
+  const rides = [...loadRides(storage), { ...ride, date: ride.date ?? rideDateKey(now) }]
   writeJson(KEYS.rides, rides, storage)
   return rides
 }
@@ -135,7 +155,7 @@ export function hasRideOn(rides: readonly Pick<RideRecord, 'placeId' | 'date'>[]
   return rides.some((r) => r.placeId === placeId && r.date === date)
 }
 
-/** 過去最長の連続日数（純粋関数） */
+/** 過去最長の連続日数（純粋関数）。longestStreak の別名あり */
 export function computeBestStreak(rides: readonly Pick<RideRecord, 'date'>[]): number {
   const days = [...new Set(rides.map((r) => r.date))]
     .map(parseDateKey)
@@ -255,6 +275,68 @@ export function toggleFavorite(place: Pick<Place, 'id' | 'name' | 'lat' | 'lng' 
   return next
 }
 
+export const longestStreak = computeBestStreak
+
+// ---------------------------------------------------------------------------
+// Departure record → 「行ってきた？」カード（BACKLOG R7）
+// ---------------------------------------------------------------------------
+
+export interface Departure {
+  placeId: string
+  name: string
+  category?: Category
+  /** 出発（Google マップを開いた）時刻 ISO */
+  at: string
+  /** 予定の往復分 */
+  plannedMin: number
+}
+
+export const RETURN_PROMPT_MIN_RATIO = 0.5
+export const RETURN_PROMPT_MAX_HOURS = 12
+
+export function saveDeparture(d: Departure, storage?: Storage | null): boolean {
+  return writeJson(KEYS.departure, d, storage)
+}
+
+export function loadDeparture(storage?: Storage | null): Departure | null {
+  const v = readJson<Departure | null>(KEYS.departure, null, storage)
+  return v && typeof v.placeId === 'string' && typeof v.at === 'string' && typeof v.plannedMin === 'number' ? v : null
+}
+
+export function clearDeparture(storage?: Storage | null): void {
+  try {
+    ;(storage === undefined ? safeStorage() : storage)?.removeItem(KEYS.departure)
+  } catch {
+    /* ignore */
+  }
+}
+
+function safeStorage(): Storage | null {
+  try {
+    return typeof localStorage === 'undefined' ? null : localStorage
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 「行ってきた？」を出すか（純粋関数）: 出発から (予定分 × 0.5) 〜 12 時間。
+ */
+export function shouldAskReturn(d: Departure | null, now: Date = new Date()): boolean {
+  if (!d) return false
+  const t = Date.parse(d.at)
+  if (Number.isNaN(t)) return false
+  const elapsedMin = (now.getTime() - t) / 60000
+  return elapsedMin >= d.plannedMin * RETURN_PROMPT_MIN_RATIO && elapsedMin <= RETURN_PROMPT_MAX_HOURS * 60
+}
+
+/** 期限切れ（12 時間超）なら true（クリーンアップ用） */
+export function isDepartureExpired(d: Departure | null, now: Date = new Date()): boolean {
+  if (!d) return false
+  const t = Date.parse(d.at)
+  return Number.isNaN(t) || now.getTime() - t > RETURN_PROMPT_MAX_HOURS * 3600_000
+}
+
 // ---------------------------------------------------------------------------
 // Recent origins / last result / one-time flags
 // ---------------------------------------------------------------------------
@@ -278,10 +360,9 @@ export function pushRecentOrigin(origin: SavedOrigin, storage?: Storage | null):
   return next
 }
 
+/** オフライン表示用の最後の検索結果（BACKLOG Y8） */
 export interface LastResult {
   origin: LatLng
-  minutes: number
-  speedKmh: number
   places: Place[]
   source: Place['source']
   savedAt: string

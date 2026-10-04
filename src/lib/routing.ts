@@ -4,14 +4,16 @@ import type { LatLng } from './types'
 
 /**
  * OSRM 互換サーバのベース URL（プロファイル部分まで含む）。先頭から順に試し、全滅なら直線。
- * - routing.openstreetmap.de の routed-bike: 自転車プロファイル（既定）
- * - router.project-osrm.org: デモサーバ（実質 car のみの可能性が高い。最後の砦）
+ * FOSSGIS の routed-bike は自転車プロファイル。サーバ実装によってはパスのプロファイル名を
+ * 無視/拒否するため、`driving` 名で投げる版もフォールバックとして試す（BACKLOG R3）。
  */
 export const OSRM_BASE_URLS = [
   'https://routing.openstreetmap.de/routed-bike/route/v1/bike',
-  'https://router.project-osrm.org/route/v1/bike',
+  'https://routing.openstreetmap.de/routed-bike/route/v1/driving',
 ] as const
 export const OSRM_BASE_URL = OSRM_BASE_URLS[0]
+/** 外部に送る座標の桁数（約 11m） */
+const COORD_DECIMALS = 4
 
 export interface RouteResult {
   /** 経路形状（出発地→目的地） */
@@ -27,7 +29,7 @@ interface OsrmResponse {
 }
 
 export function buildOsrmUrl(origin: LatLng, dest: LatLng, baseUrl: string = OSRM_BASE_URL): string {
-  const c = (p: LatLng) => `${p.lng.toFixed(6)},${p.lat.toFixed(6)}`
+  const c = (p: LatLng) => `${p.lng.toFixed(COORD_DECIMALS)},${p.lat.toFixed(COORD_DECIMALS)}`
   return `${baseUrl}/${c(origin)};${c(dest)}?overview=simplified&geometries=geojson`
 }
 
