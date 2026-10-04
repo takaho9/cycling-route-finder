@@ -1,4 +1,4 @@
-# PRD: Cycling Route Finder（仮称: ちょいチャリ / Pedal Pick）
+# PRD: Cycling Route Finder「ちょいチャリ」
 
 作成: PdM / 2026-10-04 / v1
 
@@ -65,3 +65,11 @@
 ## 7. スマホアプリ化の方針
 - Phase 1: PWA（ホーム画面追加でアプリ同等）← 今回
 - Phase 2: Capacitor でラップし iOS/Android ストア配布（要: Apple Developer / Google Play 登録、署名、アイコン）
+
+## 8. 決定ログ
+- 2026-10-04 アプリ名「ちょいチャリ」、theme_color #FF5A1F（DESIGN.md 準拠）
+- 2026-10-04 **ランニングコスト0** を最優先。Google Places API は不採用（M3/M4 の Google 記述は無効）。無料公開API（Overpass / Open-Meteo / routing.openstreetmap.de / Wikidata / Wikimedia Commons）のみ。Googleマップへは URL 遷移のみ（無料）。
+- 2026-10-04 配信は静的サイト（GitHub Pages 想定）。ストア配信はしない（Phase 2 の Capacitor 化は取りやめ）。
+- 2026-10-04 公開APIへの配慮: 検索結果キャッシュ、Overpass は1検索1リクエスト、ルーティングは詳細表示時のみ、クレジット表示必須。
+- 2026-10-04 高低差: G=max(往路獲得, 復路獲得), R=G/片道km。🔴 R≥15|G≥150|最大勾配≥8%、🟡 R≥6|G≥40。
+- 2026-10-04 実データ0件時はモックにしない（空状態）。モックは全プロバイダ失敗時のみ、デモ表示必須。ルート初期値は「往復」。
