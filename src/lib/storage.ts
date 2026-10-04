@@ -1,11 +1,14 @@
 import { DEFAULT_SPEED_PRESET, SPEED_PRESETS, type SpeedPresetId } from './reach'
-import type { Category, Place } from './types'
+import type { Category, LatLng, Place } from './types'
 
 const PREFIX = 'choichari:v1:'
 const KEYS = {
   settings: `${PREFIX}settings`,
   rides: `${PREFIX}rides`,
   favorites: `${PREFIX}favorites`,
+  recentOrigins: `${PREFIX}recentOrigins`,
+  lastResult: `${PREFIX}lastResult`,
+  flags: `${PREFIX}flags`,
 } as const
 
 /** localStorage を安全に取得（プライベートモード等で例外になりうる） */
@@ -43,14 +46,23 @@ export function writeJson(key: string, value: unknown, storage: Storage | null =
 
 export interface Settings {
   speedPreset: SpeedPresetId
+  /** 今週の目標回数 (1〜7) */
+  weeklyGoal: number
+  /** 前回選んだ往復時間 (分) */
+  lastMinutes: number
 }
 
-export const DEFAULT_SETTINGS: Settings = { speedPreset: DEFAULT_SPEED_PRESET }
+export const DEFAULT_SETTINGS: Settings = { speedPreset: DEFAULT_SPEED_PRESET, weeklyGoal: 3, lastMinutes: 45 }
 
 export function loadSettings(storage?: Storage | null): Settings {
-  const s = readJson<Partial<Settings>>(KEYS.settings, {}, storage)
-  const speedPreset = s && typeof s === 'object' && s.speedPreset && s.speedPreset in SPEED_PRESETS ? s.speedPreset : DEFAULT_SETTINGS.speedPreset
-  return { ...DEFAULT_SETTINGS, speedPreset }
+  const raw = readJson<unknown>(KEYS.settings, {}, storage)
+  const s = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof Settings, unknown>>
+  const speedPreset =
+    typeof s.speedPreset === 'string' && s.speedPreset in SPEED_PRESETS ? (s.speedPreset as SpeedPresetId) : DEFAULT_SETTINGS.speedPreset
+  const weeklyGoal =
+    typeof s.weeklyGoal === 'number' && s.weeklyGoal >= 1 && s.weeklyGoal <= 7 ? Math.round(s.weeklyGoal) : DEFAULT_SETTINGS.weeklyGoal
+  const lastMinutes = typeof s.lastMinutes === 'number' && s.lastMinutes > 0 ? s.lastMinutes : DEFAULT_SETTINGS.lastMinutes
+  return { speedPreset, weeklyGoal, lastMinutes }
 }
 
 export function saveSettings(settings: Settings, storage?: Storage | null): boolean {
@@ -68,6 +80,8 @@ export interface RideRecord {
   name: string
   /** 往復時間 (分) */
   minutes: number
+  /** スタンプ表示用 */
+  category?: Category
 }
 
 /** Date → ローカルタイムの YYYY-MM-DD */
@@ -107,6 +121,61 @@ export function addRide(
   const rides = [...loadRides(storage), { ...ride, date: ride.date ?? toDateKey(now) }]
   writeJson(KEYS.rides, rides, storage)
   return rides
+}
+
+/** placeId の今日の記録を取り消す（同日の該当記録をすべて削除） */
+export function removeRide(placeId: string, date: string, storage?: Storage | null): RideRecord[] {
+  const rides = loadRides(storage).filter((r) => !(r.placeId === placeId && r.date === date))
+  writeJson(KEYS.rides, rides, storage)
+  return rides
+}
+
+/** 指定日にその場所の記録があるか（純粋関数） */
+export function hasRideOn(rides: readonly Pick<RideRecord, 'placeId' | 'date'>[], placeId: string, date: string): boolean {
+  return rides.some((r) => r.placeId === placeId && r.date === date)
+}
+
+/** 過去最長の連続日数（純粋関数） */
+export function computeBestStreak(rides: readonly Pick<RideRecord, 'date'>[]): number {
+  const days = [...new Set(rides.map((r) => r.date))]
+    .map(parseDateKey)
+    .filter((d): d is Date => d !== null)
+    .sort((a, b) => a.getTime() - b.getTime())
+  let best = 0
+  let run = 0
+  let prev: Date | null = null
+  for (const d of days) {
+    run = prev && toDateKey(addDays(prev, 1)) === toDateKey(d) ? run + 1 : 1
+    best = Math.max(best, run)
+    prev = d
+  }
+  return best
+}
+
+/** 今週（週の開始曜日から7日）の各日に走ったかどうか。未来日は null（純粋関数） */
+export function weekActivity(
+  rides: readonly Pick<RideRecord, 'date'>[],
+  today: Date = new Date(),
+  weekStartsOn = 1,
+): { date: string; rode: boolean | null }[] {
+  const t = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  const start = addDays(t, -((t.getDay() - weekStartsOn + 7) % 7))
+  const days = new Set(rides.map((r) => r.date))
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = addDays(start, i)
+    const key = toDateKey(d)
+    return { date: key, rode: d > t ? null : days.has(key) }
+  })
+}
+
+/** スタンプ帳: 場所ごとに最初に訪れた記録（純粋関数、新しい順） */
+export function stampsFromRides(rides: readonly RideRecord[]): RideRecord[] {
+  const first = new Map<string, RideRecord>()
+  for (const r of rides) {
+    const prev = first.get(r.placeId)
+    if (!prev || r.date < prev.date) first.set(r.placeId, r)
+  }
+  return [...first.values()].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
 }
 
 /**
@@ -184,6 +253,57 @@ export function toggleFavorite(place: Pick<Place, 'id' | 'name' | 'lat' | 'lng' 
     : [...favs, { id: place.id, name: place.name, lat: place.lat, lng: place.lng, category: place.category }]
   writeJson(KEYS.favorites, next, storage)
   return next
+}
+
+// ---------------------------------------------------------------------------
+// Recent origins / last result / one-time flags
+// ---------------------------------------------------------------------------
+
+export interface SavedOrigin extends LatLng {
+  label: string
+}
+
+export function loadRecentOrigins(storage?: Storage | null): SavedOrigin[] {
+  const v = readJson<unknown>(KEYS.recentOrigins, [], storage)
+  return Array.isArray(v)
+    ? v.filter((o): o is SavedOrigin => !!o && typeof o.lat === 'number' && typeof o.lng === 'number' && typeof o.label === 'string')
+    : []
+}
+
+/** 最近使った地点の先頭に追加（同一地点は重複排除、最大3件） */
+export function pushRecentOrigin(origin: SavedOrigin, storage?: Storage | null): SavedOrigin[] {
+  const same = (o: LatLng) => Math.abs(o.lat - origin.lat) < 1e-4 && Math.abs(o.lng - origin.lng) < 1e-4
+  const next = [origin, ...loadRecentOrigins(storage).filter((o) => !same(o))].slice(0, 3)
+  writeJson(KEYS.recentOrigins, next, storage)
+  return next
+}
+
+export interface LastResult {
+  origin: LatLng
+  minutes: number
+  speedKmh: number
+  places: Place[]
+  source: Place['source']
+  savedAt: string
+}
+
+export function loadLastResult(storage?: Storage | null): LastResult | null {
+  const v = readJson<LastResult | null>(KEYS.lastResult, null, storage)
+  return v && Array.isArray(v.places) ? v : null
+}
+
+export function saveLastResult(r: LastResult, storage?: Storage | null): boolean {
+  return writeJson(KEYS.lastResult, r, storage)
+}
+
+export function loadFlag(name: string, storage?: Storage | null): boolean {
+  const v = readJson<Record<string, boolean>>(KEYS.flags, {}, storage)
+  return !!(v && typeof v === 'object' && v[name])
+}
+
+export function setFlag(name: string, value = true, storage?: Storage | null): void {
+  const v = readJson<Record<string, boolean>>(KEYS.flags, {}, storage)
+  writeJson(KEYS.flags, { ...(v && typeof v === 'object' ? v : {}), [name]: value }, storage)
 }
 
 export const STORAGE_KEYS = KEYS

@@ -1,9 +1,10 @@
+import { bearingDeg, haversineKm } from '../geo'
+import { HttpError, isAbortError, TimeoutError } from '../http'
 import type { LatLng, Place, PlaceProvider, PlaceSource } from '../types'
-import { createGoogleProvider } from './google'
+import { cacheKey, readCache, snapToGrid, writeCache } from './cache'
 import { createMockProvider } from './mock'
 import { createOverpassProvider } from './overpass'
 
-export { createGoogleProvider } from './google'
 export { createMockProvider, generateMockPlaces, mockTerrainElevation } from './mock'
 export { createOverpassProvider } from './overpass'
 export { balancedSample, dedupeByName, filterDonut, MAX_CANDIDATES } from './sampling'
@@ -11,76 +12,100 @@ export { balancedSample, dedupeByName, filterDonut, MAX_CANDIDATES } from './sam
 export interface SearchResult {
   places: Place[]
   source: PlaceSource
-  /** true ならデモデータ（UI で小さく表示する） */
+  /** true ならデモデータ（UI で必ず表示する） */
   isDemo: boolean
+  /** true ならキャッシュ（localStorage）から */
+  fromCache?: boolean
   /** フォールバックに至った各プロバイダの失敗 */
   errors: { provider: PlaceSource; error: unknown }[]
 }
 
-/** Google(キー有) → Overpass → Mock の順のプロバイダ列を作る */
-export function createDefaultProviders(googleApiKey: string | undefined = readGoogleKey()): PlaceProvider[] {
-  const providers: PlaceProvider[] = []
-  if (googleApiKey) providers.push(createGoogleProvider({ apiKey: googleApiKey }))
-  providers.push(createOverpassProvider(), createMockProvider())
-  return providers
+/** Overpass →（全滅時のみ）Mock。ランニングコスト 0 のためキー必須の API は使わない */
+export function createDefaultProviders(): PlaceProvider[] {
+  return [createOverpassProvider(), createMockProvider()]
 }
 
-function readGoogleKey(): string | undefined {
-  try {
-    const k = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
-    return typeof k === 'string' && k.trim() ? k.trim() : undefined
-  } catch {
-    return undefined
-  }
+/** デモモード（?demo=1）用: Mock のみ */
+export function createDemoProviders(): PlaceProvider[] {
+  return [createMockProvider()]
 }
 
-const cache = new Map<string, SearchResult>()
+const memoryCache = new Map<string, SearchResult>()
 export function clearPlacesCache(): void {
-  cache.clear()
+  memoryCache.clear()
 }
 
 export interface SearchPlacesOptions {
   signal?: AbortSignal
   providers?: PlaceProvider[]
-  /** これ未満の件数しか返らなければ次のプロバイダへ（既定 1 = 0 件なら次へ） */
-  minResults?: number
+  /** メモリ + localStorage(TTL 24h) キャッシュを使う */
   useCache?: boolean
+  now?: number
+}
+
+/** キャッシュ（スナップ済み中心で取得）の結果を実際の中心からの距離・方位に付け替える */
+function relocate(places: Place[], center: LatLng): Place[] {
+  return places.map((p) => ({ ...p, distanceKm: haversineKm(center, p), bearing: bearingDeg(center, p) }))
 }
 
 /**
- * プロバイダを順に試し、最初に minResults 件以上返したものを採用。
- * 全滅した場合は最後に成功した（件数不足の）結果、それも無ければ例外。
- * 呼び出し元の signal が abort された場合は AbortError を throw。
+ * プロバイダを順に試し、最初に「成功」したものの結果を採用する（0 件でも成功。空状態は UI で扱う）。
+ * 失敗（ネットワークエラー・HTTP エラー・タイムアウト等）のときだけ次のプロバイダへ。
+ * - 公開 API に優しくするため、中心を約 500m グリッドにスナップしてクエリし、結果を 24 時間キャッシュ。
+ * - mock が使われたら isDemo=true（キャッシュしない）。全プロバイダ失敗なら AggregateError。
+ * - 呼び出し元の signal が abort された場合は AbortError を throw。
  */
 export async function searchPlaces(
   center: LatLng,
   minKm: number,
   maxKm: number,
-  { signal, providers, minResults = 1, useCache = true }: SearchPlacesOptions = {},
+  { signal, providers, useCache = true, now = Date.now() }: SearchPlacesOptions = {},
 ): Promise<SearchResult> {
   const list = providers ?? createDefaultProviders()
-  const key = `${list.map((p) => p.name).join('>')}|${center.lat.toFixed(3)},${center.lng.toFixed(3)}|${minKm.toFixed(2)}-${maxKm.toFixed(2)}`
+  const snapped = snapToGrid(center)
+  const key = cacheKey(snapped, minKm, maxKm, list.map((p) => p.name).join('>'))
   if (useCache) {
-    const hit = cache.get(key)
-    if (hit) return hit
+    const hit = memoryCache.get(key) ?? readCache(key, now)
+    if (hit) {
+      memoryCache.set(key, hit)
+      return { ...hit, places: relocate(hit.places, center), fromCache: true }
+    }
   }
   const errors: SearchResult['errors'] = []
-  let partial: SearchResult | null = null
   for (const provider of list) {
     try {
-      const places = (await provider.search(center, minKm, maxKm, signal)).map((p) => ({ ...p, source: provider.name }))
+      const raw = await provider.search(snapped, minKm, maxKm, signal)
+      const places = raw.map((p) => ({ ...p, source: provider.name }))
       const result: SearchResult = { places, source: provider.name, isDemo: provider.name === 'mock', errors: [...errors] }
-      if (places.length >= minResults) {
-        if (useCache) cache.set(key, result)
-        return result
+      // デモ結果はキャッシュしない（回線復帰後に実データを取りに行けるように）
+      if (useCache && !result.isDemo) {
+        memoryCache.set(key, result)
+        writeCache(key, result, now)
       }
-      if (!partial || places.length > partial.places.length) partial = result
-      errors.push({ provider: provider.name, error: new Error(`too few results (${places.length})`) })
+      return { ...result, places: relocate(places, center) }
     } catch (e) {
       if (signal?.aborted) throw e
       errors.push({ provider: provider.name, error: e })
     }
   }
-  if (partial) return { ...partial, errors }
   throw new AggregateError(errors.map((e) => e.error), 'All place providers failed')
+}
+
+export type FallbackReason = 'busy' | 'network' | 'unknown'
+
+/** 実データが取れなかった理由（UI のやさしい文言用） */
+export function fallbackReason(errors: readonly { error: unknown }[]): FallbackReason | null {
+  if (errors.length === 0) return null
+  const flat = errors.flatMap(({ error }) => (error instanceof AggregateError ? error.errors : [error]))
+  if (flat.some((e) => (e instanceof HttpError && (e.status === 429 || e.status >= 500)) || e instanceof TimeoutError)) {
+    return 'busy'
+  }
+  if (flat.some((e) => e instanceof TypeError && !isAbortError(e))) return 'network'
+  return 'unknown'
+}
+
+export const FALLBACK_MESSAGES: Record<FallbackReason, string> = {
+  busy: '地図データのサーバーが混み合ってるみたい。少し時間をおくと実データになるよ',
+  network: '電波がちょっと迷子みたい。つながったら実データになるよ',
+  unknown: 'いまは実データを取れなかったみたい。あとでもう一度さがしてみてね',
 }

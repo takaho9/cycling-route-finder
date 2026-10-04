@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildOneWayUrl, buildRoundTripUrl, googlePlaceIdFromId } from './gmaps'
+import { buildOneWayUrl, buildRoundTripUrl } from './gmaps'
 
 const O = { lat: 35.681236, lng: 139.767125 }
 const D = { lat: 35.6585812, lng: 139.7454329 }
@@ -27,14 +27,9 @@ describe('Google Maps URLs', () => {
     expect(u.searchParams.get('waypoints')).toBe('35.658581,139.745433')
     expect(u.searchParams.get('travelmode')).toBe('bicycling')
   })
-  it('encodes place ids safely', () => {
-    const u = buildOneWayUrl({ destination: D, destinationPlaceId: 'ChIJ a&b=c' })
-    expect(u).toContain('destination_place_id=ChIJ%20a%26b%3Dc')
-    expect(new URL(u).searchParams.get('destination_place_id')).toBe('ChIJ a&b=c')
-    expect(new URL(buildRoundTripUrl({ origin: O, destination: D, destinationPlaceId: 'X' })).searchParams.get('waypoint_place_ids')).toBe('X')
-  })
-  it('googlePlaceIdFromId', () => {
-    expect(googlePlaceIdFromId('google:ChIJ123')).toBe('ChIJ123')
-    expect(googlePlaceIdFromId('osm:node/1')).toBeUndefined()
+  it('always uses coordinates (no API key / place id needed)', () => {
+    const u = buildRoundTripUrl({ origin: { lat: -33.5, lng: -70.25 }, destination: D })
+    expect(u).toContain('origin=-33.500000%2C-70.250000')
+    expect(u).not.toContain('place_id')
   })
 })

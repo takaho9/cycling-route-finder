@@ -47,7 +47,7 @@ describe('fetchWikidataImageUrl', () => {
 })
 
 describe('resolvePhotoUrl priority', () => {
-  it('google photo first', async () => {
+  it('explicit photoUrl first', async () => {
     const f = mockFetch(() => jsonResponse({}))
     expect(await resolvePhotoUrl({ photoUrl: 'https://g.test/p', tags: { image: 'https://e.test/a.jpg' } })).toBe('https://g.test/p')
     expect(f).not.toHaveBeenCalled()

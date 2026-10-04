@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
   addRide,
+  computeBestStreak,
+  hasRideOn,
+  loadFlag,
+  loadRecentOrigins,
+  pushRecentOrigin,
+  removeRide,
+  setFlag,
+  stampsFromRides,
+  weekActivity,
   computeStreak,
   countThisWeek,
   DEFAULT_SETTINGS,
@@ -68,8 +77,10 @@ describe('toDateKey / visited', () => {
 describe('persistence', () => {
   it('settings round-trip and validation', () => {
     expect(loadSettings()).toEqual(DEFAULT_SETTINGS)
-    saveSettings({ speedPreset: 'fast' })
-    expect(loadSettings().speedPreset).toBe('fast')
+    saveSettings({ ...DEFAULT_SETTINGS, speedPreset: 'fast', weeklyGoal: 5, lastMinutes: 75 })
+    expect(loadSettings()).toEqual({ speedPreset: 'fast', weeklyGoal: 5, lastMinutes: 75 })
+    localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify({ speedPreset: 'fast', weeklyGoal: 99 }))
+    expect(loadSettings().weeklyGoal).toBe(3)
     localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify({ speedPreset: 'warp' }))
     expect(loadSettings().speedPreset).toBe('normal')
     localStorage.setItem(STORAGE_KEYS.settings, '{not json')
@@ -106,5 +117,46 @@ describe('persistence', () => {
     expect(loadRides(broken)).toEqual([])
     expect(() => addRide({ placeId: 'a', name: 'a', minutes: 1 }, broken)).not.toThrow()
     expect(writeJson('k', 1, null)).toBe(false)
+  })
+})
+
+describe('habit helpers', () => {
+  it('computeBestStreak', () => {
+    expect(computeBestStreak([])).toBe(0)
+    expect(computeBestStreak(rides('2026-09-01', '2026-09-02', '2026-09-03', '2026-09-10', '2026-09-30', '2026-10-01'))).toBe(3)
+    expect(computeBestStreak(rides('2026-10-01', '2026-10-01'))).toBe(1)
+  })
+  it('weekActivity marks rode / not / future (Monday start)', () => {
+    const w = weekActivity(rides('2026-09-28', '2026-09-30'), d('2026-10-01'))
+    expect(w.map((x) => x.date)).toEqual(['2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04'])
+    expect(w.map((x) => x.rode)).toEqual([true, false, true, false, null, null, null])
+  })
+  it('stampsFromRides keeps first visit per place, newest first', () => {
+    const r = [
+      { date: '2026-10-01', placeId: 'a', name: 'A', minutes: 30 },
+      { date: '2026-09-01', placeId: 'a', name: 'A', minutes: 30 },
+      { date: '2026-09-15', placeId: 'b', name: 'B', minutes: 30 },
+    ]
+    expect(stampsFromRides(r).map((x) => [x.placeId, x.date])).toEqual([
+      ['b', '2026-09-15'],
+      ['a', '2026-09-01'],
+    ])
+  })
+  it('removeRide / hasRideOn toggle today record', () => {
+    addRide({ placeId: 'a', name: 'A', minutes: 30, date: '2026-10-04' })
+    addRide({ placeId: 'a', name: 'A', minutes: 30, date: '2026-10-03' })
+    expect(hasRideOn(loadRides(), 'a', '2026-10-04')).toBe(true)
+    removeRide('a', '2026-10-04')
+    expect(hasRideOn(loadRides(), 'a', '2026-10-04')).toBe(false)
+    expect(loadRides()).toHaveLength(1)
+  })
+  it('recent origins dedupe and cap at 3', () => {
+    for (const [i, lat] of [35, 36, 37, 35, 38].entries()) pushRecentOrigin({ lat, lng: 139, label: `p${i}` })
+    expect(loadRecentOrigins().map((o) => o.lat)).toEqual([38, 35, 37])
+  })
+  it('flags', () => {
+    expect(loadFlag('x')).toBe(false)
+    setFlag('x')
+    expect(loadFlag('x')).toBe(true)
   })
 })

@@ -11,6 +11,9 @@ export const CATEGORIES = [
   'shrine',
   'historic',
   'waterside',
+  'seaside',
+  'museum',
+  'sweets',
   'attraction',
   'roadside_station',
   'other',
@@ -18,7 +21,7 @@ export const CATEGORIES = [
 
 export type Category = (typeof CATEGORIES)[number]
 
-export type PlaceSource = 'google' | 'overpass' | 'mock'
+export type PlaceSource = 'overpass' | 'mock'
 
 export type ElevationLabel = 'flat' | 'rolling' | 'hilly'
 
@@ -29,19 +32,30 @@ export interface ElevationSummary {
   lossOneWayM: number
   /** 往復の獲得標高 (m) */
   gainRoundTripM: number
-  /** 最大勾配 (%)。上り下りどちらも絶対値で評価（復路で上りになるため） */
+  /** 最大勾配 (%)。一定距離以上の区間で平滑化し、上り下りどちらも絶対値で評価（復路で上りになるため） */
   maxGradePct: number
-  /** 往復の獲得標高 / 往復距離 (m/km) */
-  gainPerKm: number
+  /** G: きつい方向の獲得標高 = max(往路の獲得, 復路の獲得) (m)。ラベル判定に使う */
+  climbM: number
+  /** R: G ÷ 片道距離 (m/km) */
+  climbPerKm: number
   label: ElevationLabel
-  /** 出発地 → 目的地 の標高プロファイル (m)。等間隔サンプル */
+  /** 出発地 → 目的地 の標高プロファイル (m)。欠損点は除外済み */
   profile: number[]
+  /** profile 各点の出発地からの距離 (km) */
+  profileKm: number[]
   /** profile が表す片道距離 (km) */
   distanceKm: number
+  /**
+   * true = 一覧用の直線補間による推定（最大勾配はラベル判定に使わない）。
+   * false = 詳細で経路形状に沿って確定した値。
+   */
+  estimated: boolean
+  /** 標高 <= 0m のサンプルが連続した最大数（海上・水面を横切る直線の目安） */
+  seaRun: number
 }
 
 export interface Place {
-  /** プロバイダ内で一意な ID (例: "osm:node/123", "google:ChIJ...", "mock:...") */
+  /** プロバイダ内で一意な ID (例: "osm:node/123", "mock:...") */
   id: string
   name: string
   lat: number

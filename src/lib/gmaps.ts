@@ -8,8 +8,6 @@ export interface DirectionsParams {
   /** 省略時は Google マップ側で現在地が使われる（片道のみ） */
   origin?: LatLng
   destination: LatLng
-  /** Google Places の place_id（あれば目的地をより正確に指定できる） */
-  destinationPlaceId?: string
   travelmode?: TravelMode
 }
 
@@ -24,12 +22,11 @@ function build(params: [string, string | undefined][]): string {
 }
 
 /** 片道: origin → destination */
-export function buildOneWayUrl({ origin, destination, destinationPlaceId, travelmode = 'bicycling' }: DirectionsParams): string {
+export function buildOneWayUrl({ origin, destination, travelmode = 'bicycling' }: DirectionsParams): string {
   return build([
     ['api', '1'],
     ['origin', origin ? formatLatLng(origin) : undefined],
     ['destination', formatLatLng(destination)],
-    ['destination_place_id', destinationPlaceId],
     ['travelmode', travelmode],
   ])
 }
@@ -38,7 +35,6 @@ export function buildOneWayUrl({ origin, destination, destinationPlaceId, travel
 export function buildRoundTripUrl({
   origin,
   destination,
-  destinationPlaceId,
   travelmode = 'bicycling',
 }: DirectionsParams & { origin: LatLng }): string {
   const o = formatLatLng(origin)
@@ -47,12 +43,7 @@ export function buildRoundTripUrl({
     ['origin', o],
     ['destination', o],
     ['waypoints', formatLatLng(destination)],
-    ['waypoint_place_ids', destinationPlaceId],
     ['travelmode', travelmode],
   ])
 }
 
-/** google:ChIJ... 形式の Place.id から place_id を取り出す */
-export function googlePlaceIdFromId(id: string): string | undefined {
-  return id.startsWith('google:') ? id.slice('google:'.length) : undefined
-}

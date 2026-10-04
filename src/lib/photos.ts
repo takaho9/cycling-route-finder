@@ -72,7 +72,7 @@ export async function fetchWikidataImageUrl(
 
 /**
  * Place の画像 URL を解決。
- * google photo → OSM image → wikimedia_commons → wikidata P18 → null（UI 側でカテゴリ別フォールバック）
+ * 明示の photoUrl → OSM image → wikimedia_commons → wikidata P18 → null（UI 側でカテゴリ別フォールバック）
  */
 export async function resolvePhotoUrl(
   place: Pick<Place, 'photoUrl' | 'tags'>,

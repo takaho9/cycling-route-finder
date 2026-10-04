@@ -3,11 +3,15 @@ import { haversineKm, interpolateLine } from './geo'
 import type { LatLng } from './types'
 
 /**
- * OSRM ベース URL。プロファイル部分まで含める。
- * NOTE: router.project-osrm.org のデモサーバは実質 car プロファイルのみ提供している可能性が高い。
- * 自転車ルートが必要なら https://routing.openstreetmap.de/routed-bike/route/v1/bike 等を検討。
+ * OSRM 互換サーバのベース URL（プロファイル部分まで含む）。先頭から順に試し、全滅なら直線。
+ * - routing.openstreetmap.de の routed-bike: 自転車プロファイル（既定）
+ * - router.project-osrm.org: デモサーバ（実質 car のみの可能性が高い。最後の砦）
  */
-export const OSRM_BASE_URL = 'https://router.project-osrm.org/route/v1/bike'
+export const OSRM_BASE_URLS = [
+  'https://routing.openstreetmap.de/routed-bike/route/v1/bike',
+  'https://router.project-osrm.org/route/v1/bike',
+] as const
+export const OSRM_BASE_URL = OSRM_BASE_URLS[0]
 
 export interface RouteResult {
   /** 経路形状（出発地→目的地） */
@@ -22,7 +26,7 @@ interface OsrmResponse {
   routes?: { distance: number; duration: number; geometry: { coordinates: [number, number][] } }[]
 }
 
-export function buildOsrmUrl(origin: LatLng, dest: LatLng, baseUrl = OSRM_BASE_URL): string {
+export function buildOsrmUrl(origin: LatLng, dest: LatLng, baseUrl: string = OSRM_BASE_URL): string {
   const c = (p: LatLng) => `${p.lng.toFixed(6)},${p.lat.toFixed(6)}`
   return `${baseUrl}/${c(origin)};${c(dest)}?overview=simplified&geometries=geojson`
 }
@@ -36,35 +40,41 @@ export function clearRouteCache(): void {
   routeCache.clear()
 }
 
+async function fetchOsrm(url: string, opts: RequestOptions): Promise<RouteResult> {
+  const json = await fetchJson<OsrmResponse>(url, undefined, opts)
+  const route = json.routes?.[0]
+  const coords = route?.geometry?.coordinates
+  if (json.code !== 'Ok' || !route || !Array.isArray(coords) || coords.length < 2) {
+    throw new Error(`OSRM returned ${json.code ?? 'no route'}`)
+  }
+  return { path: coords.map(([lng, lat]) => ({ lat, lng })), distanceKm: route.distance / 1000, source: 'osrm' }
+}
+
 /**
  * 経路を 1 件取得（詳細表示時のみ呼ぶ想定。候補一覧で全件呼ばないこと）。
- * 失敗時は直線にフォールバック。呼び出し元の signal が abort された場合のみ AbortError を throw。
+ * baseUrls を順に試し、全滅なら直線にフォールバック。呼び出し元の signal が abort された場合のみ AbortError を throw。
  */
 export async function fetchRoute(
   origin: LatLng,
   dest: LatLng,
-  { signal, timeoutMs = 8_000, baseUrl = OSRM_BASE_URL }: RequestOptions & { baseUrl?: string } = {},
+  {
+    signal,
+    timeoutMs = 8_000,
+    baseUrls = OSRM_BASE_URLS,
+  }: RequestOptions & { baseUrls?: readonly string[] } = {},
 ): Promise<RouteResult> {
-  const url = buildOsrmUrl(origin, dest, baseUrl)
-  const cached = routeCache.get(url)
+  const cacheKey = buildOsrmUrl(origin, dest, '')
+  const cached = routeCache.get(cacheKey)
   if (cached) return cached
-  try {
-    const json = await fetchJson<OsrmResponse>(url, undefined, { signal, timeoutMs })
-    const route = json.routes?.[0]
-    const coords = route?.geometry?.coordinates
-    if (json.code !== 'Ok' || !route || !Array.isArray(coords) || coords.length < 2) {
-      throw new Error(`OSRM returned ${json.code ?? 'no route'}`)
+  for (const base of baseUrls) {
+    try {
+      const result = await fetchOsrm(buildOsrmUrl(origin, dest, base), { signal, timeoutMs })
+      routeCache.set(cacheKey, result)
+      return result
+    } catch (e) {
+      if (isAbortError(e) && signal?.aborted) throw e
+      console.warn(`[routing] ${base} failed`, e)
     }
-    const result: RouteResult = {
-      path: coords.map(([lng, lat]) => ({ lat, lng })),
-      distanceKm: route.distance / 1000,
-      source: 'osrm',
-    }
-    routeCache.set(url, result)
-    return result
-  } catch (e) {
-    if (isAbortError(e) && signal?.aborted) throw e
-    console.warn('[routing] OSRM failed, falling back to straight line', e)
-    return straightRoute(origin, dest)
   }
+  return straightRoute(origin, dest)
 }

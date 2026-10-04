@@ -36,18 +36,12 @@ describe('searchPlaces fallback', () => {
     expect(r.errors.map((e) => e.provider)).toEqual(['google', 'overpass'])
   })
 
-  it('treats too few results as a fallthrough', async () => {
+  it('a real provider succeeding with 0 results does NOT fall back to mock', async () => {
     const o = provider('overpass', async () => [])
     const m = provider('mock', async () => [place('m1')])
-    expect((await searchPlaces(C, 2, 4, { providers: [o, m] })).source).toBe('mock')
-  })
-
-  it('returns the best partial result if nobody reaches minResults', async () => {
-    const o = provider('overpass', async () => [place('o1'), place('o2')])
-    const m = provider('mock', async () => [place('m1')])
-    const r = await searchPlaces(C, 2, 4, { providers: [o, m], minResults: 10 })
-    expect(r.source).toBe('overpass')
-    expect(r.places).toHaveLength(2)
+    const r = await searchPlaces(C, 2, 4, { providers: [o, m] })
+    expect(r).toMatchObject({ source: 'overpass', isDemo: false, places: [] })
+    expect(m.search).not.toHaveBeenCalled()
   })
 
   it('throws AggregateError when all fail', async () => {
@@ -68,6 +62,13 @@ describe('searchPlaces fallback', () => {
     const m = provider('mock', async () => [place('m1')])
     await expect(searchPlaces(C, 2, 4, { providers: [o, m], signal: ac.signal })).rejects.toMatchObject({ name: 'AbortError' })
     expect(m.search).not.toHaveBeenCalled()
+  })
+
+  it('does not cache demo results', async () => {
+    const m = provider('mock', async () => [place('m1')])
+    await searchPlaces(C, 2, 4, { providers: [m] })
+    await searchPlaces(C, 2, 4, { providers: [m] })
+    expect(m.search).toHaveBeenCalledTimes(2)
   })
 
   it('caches results per center / band', async () => {

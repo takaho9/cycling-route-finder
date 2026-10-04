@@ -20,7 +20,9 @@ export const MIN_PARK_BBOX_DIAGONAL_M = 150
 /** 名前から小規模と判断する公園 */
 export const SMALL_PARK_NAME_RE = /児童遊園|ちびっこ|児童公園|ポケットパーク|遊び場|プチテラス/
 /** 水辺っぽい公園名 → waterside に寄せる */
-const WATERSIDE_NAME_RE = /河川敷|親水|水辺|海浜|湖畔|川沿い|ビーチ|浜/
+const WATERSIDE_NAME_RE = /河川敷|親水|水辺|湖畔|川沿い/
+/** 海っぽい公園名 → seaside に寄せる */
+const SEASIDE_NAME_RE = /海浜|海岸|ビーチ|臨海|浜/
 
 /**
  * 取得するセレクタ。`nwr` は way/relation を含むため重い。nodes で十分なものは `node`。
@@ -38,6 +40,9 @@ export const OVERPASS_SELECTORS: readonly string[] = [
   'wr["natural"="water"]["name"]["water"~"^(lake|pond|reservoir)$"]',
   'nwr["leisure"="marina"]["name"]',
   'nwr["tourism"="attraction"]["name"]',
+  'nwr["tourism"~"^(museum|gallery)$"]["name"]',
+  'node["shop"~"^(confectionery|pastry|chocolate)$"]["name"]',
+  'node["amenity"="ice_cream"]["name"]',
   'nwr["highway"~"^(services|rest_area)$"]["name"~"道の駅"]',
 ]
 
@@ -74,9 +79,17 @@ export function categorizeOsmTags(tags: Record<string, string>): Category {
   if (tags.tourism === 'viewpoint') return 'viewpoint'
   if (tags.amenity === 'cafe') return 'cafe'
   if (tags.shop === 'bakery') return 'bakery'
+  if (tags.shop === 'confectionery' || tags.shop === 'pastry' || tags.shop === 'chocolate' || tags.amenity === 'ice_cream') {
+    return 'sweets'
+  }
   if (tags.amenity === 'place_of_worship') return 'shrine'
-  if (tags.natural === 'beach' || tags.natural === 'water' || tags.leisure === 'marina') return 'waterside'
-  if (tags.leisure === 'park' || tags.leisure === 'garden') return WATERSIDE_NAME_RE.test(name) ? 'waterside' : 'park'
+  if (tags.tourism === 'museum' || tags.tourism === 'gallery') return 'museum'
+  if (tags.natural === 'beach' || tags.natural === 'coastline') return 'seaside'
+  if (tags.natural === 'water' || tags.leisure === 'marina') return 'waterside'
+  if (tags.leisure === 'park' || tags.leisure === 'garden') {
+    if (SEASIDE_NAME_RE.test(name)) return 'seaside'
+    return WATERSIDE_NAME_RE.test(name) ? 'waterside' : 'park'
+  }
   if (tags.historic) return 'historic'
   if (tags.tourism === 'attraction') return 'attraction'
   return 'other'
