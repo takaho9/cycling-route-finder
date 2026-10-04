@@ -12,10 +12,9 @@ describe('mock provider', () => {
   it('differs for different centers', () => {
     expect(generateMockPlaces(C, 2, 4)[0].name).not.toBe(generateMockPlaces({ lat: 34.7, lng: 135.5 }, 2, 4)[0].name)
   })
-  it('places are within the donut, uniquely named, mixed categories, spread bearings', () => {
-    const ps = generateMockPlaces(C, 2, 4)
-    expect(ps.length).toBeGreaterThanOrEqual(20)
-    expect(ps.length).toBeLessThanOrEqual(40)
+  it('places are within the band, uniquely named, mixed categories, spread bearings', () => {
+    const ps = generateMockPlaces(C, 2, 4, 36)
+    expect(ps).toHaveLength(36)
     for (const p of ps) {
       expect(p.distanceKm).toBeGreaterThanOrEqual(2 - 1e-6)
       expect(p.distanceKm).toBeLessThanOrEqual(4 + 1e-6)
@@ -30,7 +29,7 @@ describe('mock provider', () => {
     expect(new Set(ps.map((p) => bearingSector(p.bearing))).size).toBe(8)
   })
   it('names look Japanese', () => {
-    const names = generateMockPlaces(C, 2, 4).map((p) => p.name)
+    const names = generateMockPlaces(C, 2, 4, 36).map((p) => p.name)
     expect(names.some((n) => /公園|緑地/.test(n))).toBe(true)
     expect(names.some((n) => /展望|見晴らし|の丘/.test(n))).toBe(true)
     expect(names.some((n) => /珈琲|カフェ|喫茶|COFFEE/.test(n))).toBe(true)
@@ -46,5 +45,20 @@ describe('mock provider', () => {
     const ac = new AbortController()
     ac.abort()
     await expect(createMockProvider().search(C, 1, 2, ac.signal)).rejects.toMatchObject({ name: 'AbortError' })
+  })
+})
+
+describe('mock across the whole search band', () => {
+  it('every time chip × preset gets enough candidates (log-uniform distances)', async () => {
+    const { searchBand, computeReach, ROUND_TRIP_MINUTES, SPEED_PRESETS } = await import('../reach')
+    const { filterDonut } = await import('./sampling')
+    const band = searchBand()
+    const all = generateMockPlaces(C, band.minKm, band.maxKm)
+    for (const p of Object.values(SPEED_PRESETS)) {
+      for (const m of ROUND_TRIP_MINUTES) {
+        const r = computeReach(m, p.kmh)
+        expect(filterDonut(all, r.minKm, r.bandMaxKm).length).toBeGreaterThanOrEqual(12)
+      }
+    }
   })
 })

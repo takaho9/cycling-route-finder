@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import { destinationPoint } from '../geo'
 import type { Category, Place } from '../types'
-import { balancedSample, dedupeByName, filterDonut } from './sampling'
+import { attractiveness, balancedSample, dedupeNearby, filterDonut } from './sampling'
 
+const C = { lat: 35.68, lng: 139.76 }
 const mk = (id: string, category: Category, bearing: number, extra: Partial<Place> = {}): Place => ({
   id,
   name: id,
-  lat: 0,
-  lng: 0,
+  ...destinationPoint(C, bearing, 1),
   category,
   distanceKm: 1,
   bearing,
@@ -20,14 +21,21 @@ describe('sampling', () => {
     expect(filterDonut(ps, 1, 3).map((p) => p.distanceKm)).toEqual([1, 2, 3])
   })
 
-  it('dedupeByName normalizes width and spaces', () => {
-    const ps = [mk('a', 'cafe', 0, { name: 'ドトール コーヒー' }), mk('b', 'cafe', 0, { name: 'ドトール　コーヒー' }), mk('c', 'cafe', 0, { name: 'ＡＢＣ' }), mk('d', 'cafe', 0, { name: 'abc' })]
-    expect(dedupeByName(ps).map((p) => p.id)).toEqual(['a', 'c'])
+  it('dedupeNearby merges same name within 300 m, keeps the more attractive, keeps distant namesakes', () => {
+    const a = mk('a', 'shrine', 0, { name: '八幡神社' })
+    const b = mk('b', 'shrine', 0, { name: '八幡　神社', ...destinationPoint(a, 90, 0.2), tags: { wikidata: 'Q1' } })
+    const far = mk('c', 'shrine', 0, { name: '八幡神社', ...destinationPoint(a, 90, 2) })
+    expect(dedupeNearby([a, b, far]).map((p) => p.id)).toEqual(['b', 'c'])
+  })
+
+  it('attractiveness rewards wikidata, heritage, size and photos', () => {
+    expect(attractiveness({})).toBe(0)
+    expect(attractiveness({ tags: { wikidata: 'Q1', heritage: '2', size_m: '1500' } })).toBe(3 + 2 + 3)
+    expect(attractiveness({ photoUrl: 'x' })).toBe(4)
   })
 
   it('returns all when under the limit', () => {
-    const ps = [mk('a', 'park', 0), mk('b', 'cafe', 90)]
-    expect(balancedSample(ps, 40)).toHaveLength(2)
+    expect(balancedSample([mk('a', 'park', 0), mk('b', 'cafe', 90)], 40)).toHaveLength(2)
   })
 
   it('balances categories when one category dominates', () => {
@@ -37,19 +45,16 @@ describe('sampling', () => {
     const out = balancedSample([...cafes, ...parks, ...shrines], 40)
     expect(out).toHaveLength(40)
     expect(out.filter((p) => p.category === 'park')).toHaveLength(5)
-    expect(out.filter((p) => p.category === 'shrine')).toHaveLength(5)
     expect(out.filter((p) => p.category === 'cafe')).toHaveLength(30)
   })
 
   it('spreads bearings within a category', () => {
-    // 50 cafes to the north, 5 to the south: the south ones must all be picked
     const north = Array.from({ length: 50 }, (_, i) => mk(`n${String(i).padStart(2, '0')}`, 'cafe', 1))
     const south = Array.from({ length: 5 }, (_, i) => mk(`s${i}`, 'cafe', 180))
-    const out = balancedSample([...north, ...south], 10)
-    expect(out.filter((p) => p.bearing === 180)).toHaveLength(5)
+    expect(balancedSample([...north, ...south], 10).filter((p) => p.bearing === 180)).toHaveLength(5)
   })
 
-  it('prefers places with photo hints and is deterministic', () => {
+  it('prefers attractive places and is deterministic', () => {
     const ps = Array.from({ length: 20 }, (_, i) => mk(`p${String(i).padStart(2, '0')}`, 'park', 0))
     ps[17] = { ...ps[17], tags: { wikidata: 'Q1' } }
     const a = balancedSample(ps, 3)
