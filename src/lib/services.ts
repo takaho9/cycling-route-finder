@@ -3,6 +3,8 @@ import { samplePolyline } from './geo'
 import { geocode, PRESET_ORIGINS, reverseGeocode, type GeocodeHit } from './geocode'
 import { resolvePhotos, type PhotoInfo } from './photos'
 import { createDemoProviders, searchPlaces, type SearchResult } from './places'
+import { loadStaticIndex } from './places/static'
+import type { StaticIndex } from './places/staticData'
 import { mockElevationProfile } from './places/mock'
 import { fetchRoute, straightRoute, type RouteResult } from './routing'
 import type { ElevationSummary, LatLng, Place } from './types'
@@ -23,6 +25,8 @@ export interface Services {
   routeDetail(origin: LatLng, place: Place, signal?: AbortSignal): Promise<{ route: RouteResult; elevation: ElevationSummary | null }>
   geocode(query: string, signal?: AbortSignal): Promise<GeocodeHit[]>
   placeName(p: LatLng, signal?: AbortSignal): Promise<string | null>
+  /** 事前生成した都内データの情報（生成日時・データ源）。設定画面のクレジット用（v1.3） */
+  dataInfo?(): Promise<StaticIndex | null>
 }
 
 function mockRouteDetail(origin: LatLng, place: Place) {
@@ -63,6 +67,7 @@ export const realServices: Services = {
   },
   geocode: (q, signal) => geocode(q, { signal }),
   placeName: (p, signal) => reverseGeocode(p, { signal }),
+  dataInfo: () => loadStaticIndex().catch(() => null),
 }
 
 export const demoServices: Services = {

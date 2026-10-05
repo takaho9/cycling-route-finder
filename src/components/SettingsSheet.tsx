@@ -1,5 +1,6 @@
-import { useId } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { CREDITS, NON_COMMERCIAL_NOTE, PRIVACY_DESTINATIONS, PRIVACY_SUMMARY } from '../lib/credits'
+import type { StaticIndex } from '../lib/places/staticData'
 import { SPEED_PRESETS, type SpeedPresetId } from '../lib/reach'
 import { BottomSheet } from './BottomSheet'
 import { ChevronRight } from './Icons'
@@ -15,6 +16,7 @@ export function SettingsSheet({
   onWeeklyGoal,
   origin,
   onChangeOrigin,
+  loadDataInfo,
 }: {
   open: boolean
   onClose: () => void
@@ -24,8 +26,21 @@ export function SettingsSheet({
   onWeeklyGoal: (n: number) => void
   origin: Origin | null
   onChangeOrigin: () => void
+  /** 事前生成データの index.json を読む（v1.3） */
+  loadDataInfo?: () => Promise<StaticIndex | null>
 }) {
   const ids = { speed: useId(), goal: useId(), origin: useId(), credit: useId(), privacy: useId() }
+  const [dataInfo, setDataInfo] = useState<StaticIndex | null>(null)
+  useEffect(() => {
+    if (!open || !loadDataInfo) return
+    let alive = true
+    loadDataInfo()
+      .then((d) => alive && setDataInfo(d))
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [open, loadDataInfo])
   return (
     <BottomSheet open={open} onClose={onClose} title="設定" snap="full" className="settings">
       <section className="set-section" aria-labelledby={ids.speed}>
@@ -111,6 +126,7 @@ export function SettingsSheet({
               </li>
             ))}
           </ul>
+          {dataInfo && <DataInfo info={dataInfo} />}
         </details>
       </section>
 
@@ -131,5 +147,36 @@ export function SettingsSheet({
       </section>
       <p className="settings__version">ちょいチャリ v{__APP_VERSION__}</p>
     </BottomSheet>
+  )
+}
+
+/** 都内の事前生成データの生成日時とデータ源（v1.3） */
+export function formatGeneratedAt(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+function DataInfo({ info }: { info: StaticIndex }) {
+  return (
+    <div className="data-info">
+      <p className="data-info__title">
+        {info.region}の行き先データ{info.sample && <span className="data-info__sample">（サンプル）</span>}
+      </p>
+      <p className="data-info__meta">
+        <span className="num">{formatGeneratedAt(info.generatedAt)}</span> 生成 · <span className="num">{info.count.toLocaleString('ja-JP')}</span> か所
+      </p>
+      <ul className="credits">
+        {info.sources.map((s) => (
+          <li key={s.name}>
+            <span className="credits__role">{s.license}</span>
+            <a href={s.url} target="_blank" rel="noopener">
+              {s.name}
+            </a>
+          </li>
+        ))}
+      </ul>
+      <p className="data-info__note">都外は OpenStreetMap（Overpass API）からその場で取得するよ</p>
+    </div>
   )
 }

@@ -20,6 +20,22 @@ function basePath(): string {
   return `/${raw.replace(/^\/+|\/+$/g, '')}/`.replace(/^\/\/$/, '/')
 }
 
+/**
+ * 都内の事前生成データ（public/data/tokyo/*.json, v1.3）の runtimeCaching。
+ * 一度読んだタイルはオフラインでも使える。タイル URL には ?v=<データ版> が付くので、データ更新後は新しい URL を取りに行く。
+ * 古い版のタイルは件数上限・期限で自然に消える。
+ */
+export const STATIC_DATA_CACHE_NAME = 'choichari-data-tokyo'
+export const STATIC_DATA_RUNTIME_CACHE = {
+  urlPattern: /\/data\/tokyo\/(?:index|t_\d+_\d+)\.json(?:\?.*)?$/,
+  handler: 'StaleWhileRevalidate' as const,
+  options: {
+    cacheName: STATIC_DATA_CACHE_NAME,
+    expiration: { maxEntries: 250, maxAgeSeconds: 60 * 60 * 24 * 60 },
+    cacheableResponse: { statuses: [200] },
+  },
+}
+
 export default defineConfig({
   base: basePath(),
   define: {
@@ -54,9 +70,12 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // アプリシェルのみ。外部 API の結果は JS 側（IndexedDB/localStorage）でキャッシュする。
+        // precache はアプリシェルのみ（json を含めない = 都内データは precache しない）。外部 API の結果は JS 側（IndexedDB/localStorage）でキャッシュする。
         globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest,woff2}'],
         navigateFallback: 'index.html',
+        // データファイルの 404 を index.html で返さない
+        navigateFallbackDenylist: [/\/data\//],
+        runtimeCaching: [STATIC_DATA_RUNTIME_CACHE],
       },
     }),
   ],

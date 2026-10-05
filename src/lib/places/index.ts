@@ -230,6 +230,10 @@ export function fallbackReason(errors: readonly { error: unknown }[], online: bo
   return 'unknown'
 }
 
+/** 事前生成データがサンプル版（index.json の sample: true）のときの説明 */
+export const SAMPLE_DATA_MESSAGE =
+  'いまは東京駅まわりのサンプルデータ（実在のスポットの一部だけ）で表示中。都内全域のデータを準備中だよ'
+
 export const FALLBACK_MESSAGES: Record<FallbackReason, string> = {
   busy: '地図データのサーバーが混み合ってるみたい。少し時間をおくと実データになるよ',
   network: '電波がちょっと迷子みたい。つながったら実データになるよ',

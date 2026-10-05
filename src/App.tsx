@@ -20,7 +20,7 @@ import { usePlaceSearch } from './hooks/usePlaceSearch'
 import { useStableRecommendations } from './hooks/useRecommendations'
 import { categoriesIn, filterAndSort, recommendationKey, selectCandidates } from './lib/candidates'
 import { buildDepartUrl, buildOneWayUrl } from './lib/gmaps'
-import { FALLBACK_MESSAGES } from './lib/places'
+import { FALLBACK_MESSAGES, SAMPLE_DATA_MESSAGE } from './lib/places'
 import { formatMinutesJa, roadBudgetKm, ROUND_TRIP_MINUTES, SPEED_PRESETS } from './lib/reach'
 import { demoServices, isDemoMode, realServices, type Services } from './lib/services'
 import { loadFlag, loadSettings, saveSettings, setFlag, shouldAskReturn, type Settings } from './lib/storage'
@@ -261,8 +261,11 @@ export default function App({ services: injected, now: clock = systemNow }: { se
 
   // 詳細はいま表示中のデータ（写真・標高・経路距離の追加ロード後）を優先
   const detailView = detail ? (viewsById.get(detail.id) ?? detail) : null
-  const isDemo = !!search.result?.isDemo || services.demo
+  // 事前生成データのサンプル版（網羅性が無い）もデモ扱いで表示する（v1.3）
+  const sampleData = !!search.result?.sample && !search.result.isDemo && !services.demo
+  const isDemo = !!search.result?.isDemo || sampleData || services.demo
   const demoReason = search.reason ? FALLBACK_MESSAGES[search.reason] : null
+  const demoMessage = sampleData ? SAMPLE_DATA_MESSAGE : undefined
   const searchDone = search.status !== 'idle' && search.status !== 'loading'
   const homeCats = useMemo(() => topCategories(candidates), [candidates])
 
@@ -306,7 +309,7 @@ export default function App({ services: injected, now: clock = systemNow }: { se
             onSpeedTap={() => setSheet('settings')}
             daylight={daylight}
             firstRun={firstRun}
-            demo={isDemo && origin && searchDone ? <DemoPill reason={demoReason} /> : null}
+            demo={isDemo && origin && searchDone ? <DemoPill reason={demoReason} message={demoMessage} /> : null}
             categories={homeCats}
             count={origin && searchDone ? views.length : null}
             isDemo={isDemo}
@@ -342,6 +345,7 @@ export default function App({ services: injected, now: clock = systemNow }: { se
           available={available}
           isDemo={isDemo}
           demoReason={demoReason}
+          demoMessage={demoMessage}
           fallback={search.fallback}
           tripOf={tripOf}
           goHrefOf={goHrefOf}
@@ -415,6 +419,7 @@ export default function App({ services: injected, now: clock = systemNow }: { se
         onWeeklyGoal={(weeklyGoal) => updateSettings({ weeklyGoal })}
         origin={origin}
         onChangeOrigin={() => setSheet('origin')}
+        loadDataInfo={services.dataInfo}
       />
       <OriginSheet
         open={sheet === 'origin'}

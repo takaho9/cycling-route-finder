@@ -98,7 +98,8 @@ export function DaylightChip({ status, minutes }: { status: DaylightStatus; minu
 }
 
 /** デモデータ ピル＋説明ポップオーバー（DESIGN §3.6） */
-export function DemoPill({ reason }: { reason?: string | null }) {
+/** message: 説明文の差し替え（事前生成データのサンプル版など, v1.3） */
+export function DemoPill({ reason, message }: { reason?: string | null; message?: string }) {
   const [open, setOpen] = useState(false)
   const id = useId()
   const ref = useRef<HTMLSpanElement>(null)
@@ -122,7 +123,7 @@ export function DemoPill({ reason }: { reason?: string | null }) {
       </button>
       {open && (
         <span id={id} className="demo-pop" role="note">
-          いまはサンプルの行き先を表示中。電波やAPIが戻ると実データになるよ
+          {message ?? 'いまはサンプルの行き先を表示中。電波やAPIが戻ると実データになるよ'}
           {reason && <span className="demo-pop__reason">{reason}</span>}
         </span>
       )}

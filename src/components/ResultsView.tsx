@@ -32,6 +32,7 @@ export function ResultsView({
   available,
   isDemo,
   demoReason,
+  demoMessage,
   fallback,
   tripOf,
   goHrefOf,
@@ -58,6 +59,7 @@ export function ResultsView({
   available: readonly Category[]
   isDemo: boolean
   demoReason?: string | null
+  demoMessage?: string
   /** 実 API が失敗してデモに落ちている（?demo=1 ではない）。再試行ボタンを出し、カードから直接出発させない（C6） */
   fallback: boolean
   tripOf: (p: ViewPlace) => TripEstimate
@@ -120,7 +122,7 @@ export function ResultsView({
           <p>
             <strong className="num">{total}</strong>件の行き先
           </p>
-          {isDemo && <DemoPill reason={demoReason} />}
+          {isDemo && <DemoPill reason={demoReason} message={demoMessage} />}
           {fallback && (
             <button type="button" className="btn btn--text count-line__retry" onClick={onRetry}>
               実データでさがし直す

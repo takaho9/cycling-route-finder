@@ -27,7 +27,7 @@ export interface PrivacyDestination {
 
 /** 外部に送るもの（すべて無料の公開 API。アカウント・解析ツールなし） */
 export const PRIVACY_DESTINATIONS: readonly PrivacyDestination[] = [
-  { host: 'overpass-api.de ほか Overpass API', what: '約1km単位に丸めた検索の中心' },
+  { host: 'overpass-api.de ほか Overpass API', what: '約1km単位に丸めた検索の中心（出発地が都外のときだけ。都内は事前に作ったデータをこのサイトから読むだけ）' },
   { host: 'api.open-meteo.com', what: '候補までの道のりの座標（約11m単位）' },
   { host: 'routing.openstreetmap.de', what: '出発地と目的地（約11m単位、詳細を開いたときだけ）' },
   { host: 'nominatim.openstreetmap.org', what: '入力した地名／現在地の地名（約100m単位）' },
