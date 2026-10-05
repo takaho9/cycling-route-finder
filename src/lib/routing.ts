@@ -1,5 +1,6 @@
 import { fetchJson, isAbortError, type RequestOptions } from './http'
 import { haversineKm, interpolateLine } from './geo'
+import { createKvCache, type KvCache } from './kvCache'
 import type { LatLng } from './types'
 
 /**
@@ -38,9 +39,37 @@ export function straightRoute(origin: LatLng, dest: LatLng): RouteResult {
 }
 
 const routeCache = new Map<string, RouteResult>()
+/** メモリ層を消す（永続層は残す） */
 export function clearRouteCache(): void {
   routeCache.clear()
 }
+
+/** 永続キャッシュ（v1.2）: 道路は変わりうるので 7 日。直線フォールバックは保存しない */
+export const ROUTE_PERSIST_TTL_MS = 7 * 24 * 60 * 60 * 1000
+export const ROUTE_PERSIST_MAX = 100
+let persistent: KvCache<RouteResult> | null | undefined
+
+function routeStore(): KvCache<RouteResult> | null {
+  return (persistent ??= createKvCache<RouteResult>({
+    namespace: 'route',
+    ttlMs: ROUTE_PERSIST_TTL_MS,
+    maxEntries: ROUTE_PERSIST_MAX,
+    maxEntriesLocalStorage: 20,
+  }))
+}
+
+/** テスト用: 永続層を差し替える（null = 永続層なし, undefined = 既定に戻す） */
+export function setRoutePersistentCache(c: KvCache<RouteResult> | null | undefined): void {
+  persistent = c
+}
+
+const isRouteResult = (r: unknown): r is RouteResult =>
+  !!r &&
+  typeof r === 'object' &&
+  (r as RouteResult).source === 'osrm' &&
+  typeof (r as RouteResult).distanceKm === 'number' &&
+  Array.isArray((r as RouteResult).path) &&
+  (r as RouteResult).path.length >= 2
 
 async function fetchOsrm(url: string, opts: RequestOptions): Promise<RouteResult> {
   const json = await fetchJson<OsrmResponse>(url, undefined, opts)
@@ -68,10 +97,22 @@ export async function fetchRoute(
   const cacheKey = buildOsrmUrl(origin, dest, '')
   const cached = routeCache.get(cacheKey)
   if (cached) return cached
+  const store = routeStore()
+  const stored = store ? await store.get(cacheKey) : undefined
+  if (signal?.aborted) {
+    const e = new Error('The operation was aborted')
+    e.name = 'AbortError'
+    throw e
+  }
+  if (isRouteResult(stored)) {
+    routeCache.set(cacheKey, stored)
+    return stored
+  }
   for (const base of baseUrls) {
     try {
       const result = await fetchOsrm(buildOsrmUrl(origin, dest, base), { signal, timeoutMs })
       routeCache.set(cacheKey, result)
+      if (store) void store.set(cacheKey, result)
       return result
     } catch (e) {
       if (isAbortError(e) && signal?.aborted) throw e

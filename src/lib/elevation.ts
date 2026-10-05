@@ -1,5 +1,6 @@
 import { fetchJson, isAbortError, mapWithConcurrency, type RequestOptions } from './http'
 import { haversineKm, interpolateLine } from './geo'
+import { createKvCache, type KvCache } from './kvCache'
 import type { ElevationLabel, ElevationSummary, LatLng } from './types'
 
 /**
@@ -208,6 +209,28 @@ const pointKey = (p: LatLng) => `${p.lat.toFixed(COORD_DECIMALS)},${p.lng.toFixe
 /** セッション内キャッシュ（約 11m 単位で丸めたキー） */
 const elevationCache = new Map<string, number>()
 
+/** 永続キャッシュ（v1.2）: 標高は変わらないので 30 日。キーは小数 4 桁の座標 */
+export const ELEVATION_PERSIST_TTL_MS = 30 * 24 * 60 * 60 * 1000
+/** 一覧 1 回 ≈ 候補 40 × 10 点、詳細 1 回 ≈ 最大 100 点。IndexedDB なら数十 KB〜1MB 程度 */
+export const ELEVATION_PERSIST_MAX = 20_000
+const ELEVATION_PERSIST_MAX_LS = 3_000
+let persistent: KvCache<number> | null | undefined
+
+function elevationStore(): KvCache<number> | null {
+  return (persistent ??= createKvCache<number>({
+    namespace: 'elevation',
+    ttlMs: ELEVATION_PERSIST_TTL_MS,
+    maxEntries: ELEVATION_PERSIST_MAX,
+    maxEntriesLocalStorage: ELEVATION_PERSIST_MAX_LS,
+  }))
+}
+
+/** テスト用: 永続層を差し替える（null = 永続層なし, undefined = 既定に戻す） */
+export function setElevationPersistentCache(c: KvCache<number> | null | undefined): void {
+  persistent = c
+}
+
+/** メモリ層を消す（永続層は残す） */
 export function clearElevationCache(): void {
   elevationCache.clear()
 }
@@ -220,6 +243,12 @@ export function buildElevationUrl(points: readonly LatLng[]): string {
   const lat = points.map((p) => p.lat.toFixed(COORD_DECIMALS)).join(',')
   const lng = points.map((p) => p.lng.toFixed(COORD_DECIMALS)).join(',')
   return `${OPEN_METEO_ELEVATION_URL}?latitude=${lat}&longitude=${lng}`
+}
+
+function abortError(): Error {
+  const e = new Error('The operation was aborted')
+  e.name = 'AbortError'
+  return e
 }
 
 export interface ElevationFetchOptions extends RequestOptions {
@@ -237,6 +266,14 @@ export async function fetchElevations(
   { signal, timeoutMs = 10_000, concurrency = 2 }: ElevationFetchOptions = {},
 ): Promise<(number | null)[] | null> {
   const keys = points.map(pointKey)
+  // メモリ → 永続（1 トランザクションでまとめて）→ ネットワーク
+  const notInMemory = [...new Set(keys.filter((k) => !elevationCache.has(k)))]
+  const store = elevationStore()
+  if (store && notInMemory.length) {
+    const hit = await store.getMany(notInMemory)
+    hit.forEach((v, k) => typeof v === 'number' && Number.isFinite(v) && elevationCache.set(k, v))
+    if (signal?.aborted) throw abortError()
+  }
   const missing: LatLng[] = []
   const seen = new Set<string>()
   points.forEach((p, i) => {
@@ -246,6 +283,7 @@ export async function fetchElevations(
       missing.push(p)
     }
   })
+  const fetched: [string, number][] = []
   const batches: LatLng[][] = []
   for (let i = 0; i < missing.length; i += OPEN_METEO_MAX_POINTS) {
     batches.push(missing.slice(i, i + OPEN_METEO_MAX_POINTS))
@@ -256,13 +294,18 @@ export async function fetchElevations(
       const elev = json.elevation
       if (!Array.isArray(elev) || elev.length !== batch.length) throw new Error('Unexpected elevation response')
       batch.forEach((p, i) => {
-        if (typeof elev[i] === 'number' && Number.isFinite(elev[i])) elevationCache.set(pointKey(p), elev[i])
+        if (typeof elev[i] === 'number' && Number.isFinite(elev[i])) {
+          elevationCache.set(pointKey(p), elev[i])
+          fetched.push([pointKey(p), elev[i]])
+        }
       })
     } catch (e) {
       if (signal?.aborted) throw e
       if (!isAbortError(e)) console.warn('[elevation] batch failed', e)
     }
   })
+  // 書き込みは待たない（表示を遅らせない）。まとめて 1 トランザクション
+  if (store && fetched.length) void store.setMany(fetched)
   const out = keys.map((k) => elevationCache.get(k) ?? null)
   return out.every((v) => v === null) && out.length > 0 ? null : out
 }

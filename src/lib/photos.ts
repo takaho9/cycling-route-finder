@@ -1,4 +1,5 @@
 import { fetchJson, isAbortError, mapWithConcurrency, type RequestOptions } from './http'
+import { createKvCache, type KvCache } from './kvCache'
 import type { Category, Place } from './types'
 
 /** サムネ幅（BACKLOG A4）: 一覧 / 詳細 */
@@ -220,31 +221,62 @@ export async function fetchCommonsNearby(
   width: number,
   opts: RequestOptions = {},
 ): Promise<PhotoInfo | null> {
-  const url =
-    `${COMMONS_API}?action=query&generator=geosearch&ggscoord=${p.lat.toFixed(5)}%7C${p.lng.toFixed(5)}` +
-    `&ggsradius=${NEARBY_RADIUS_M}&ggsnamespace=6&ggslimit=10&${IMAGEINFO_PARAMS}&iiurlwidth=${width}`
   try {
-    const json = await fetchJson<ImageInfoResponse & { query?: { pages?: Record<string, ImageInfoPage & { index?: number }> } }>(
-      url,
-      undefined,
-      { timeoutMs: 8_000, ...opts },
-    )
-    const pages = Object.values(json.query?.pages ?? {}).sort(
-      (a, b) => ((a as { index?: number }).index ?? 0) - ((b as { index?: number }).index ?? 0),
-    )
-    const usable = pages.map((page) => ({ page, info: toPhotoInfo(page) })).filter((x) => x.info)
-    const named = p.name ? usable.find((x) => titleMatchesName(x.page.title ?? '', p.name!)) : undefined
-    const chosen = named ?? usable[0]
-    return chosen?.info ? { ...chosen.info, nearby: true } : null
+    return await commonsNearbyOrThrow(p, width, opts)
   } catch (e) {
     if (opts.signal?.aborted) throw e
     return null
   }
 }
 
+/** fetchCommonsNearby の本体。通信失敗は throw（「写真なし」と区別して永続化しないため） */
+async function commonsNearbyOrThrow(
+  p: { lat: number; lng: number; name?: string },
+  width: number,
+  opts: RequestOptions,
+): Promise<PhotoInfo | null> {
+  const url =
+    `${COMMONS_API}?action=query&generator=geosearch&ggscoord=${p.lat.toFixed(5)}%7C${p.lng.toFixed(5)}` +
+    `&ggsradius=${NEARBY_RADIUS_M}&ggsnamespace=6&ggslimit=10&${IMAGEINFO_PARAMS}&iiurlwidth=${width}`
+  const json = await fetchJson<ImageInfoResponse & { query?: { pages?: Record<string, ImageInfoPage & { index?: number }> } }>(
+    url,
+    undefined,
+    { timeoutMs: 8_000, ...opts },
+  )
+  const pages = Object.values(json.query?.pages ?? {}).sort(
+    (a, b) => ((a as { index?: number }).index ?? 0) - ((b as { index?: number }).index ?? 0),
+  )
+  const usable = pages.map((page) => ({ page, info: toPhotoInfo(page) })).filter((x) => x.info)
+  const named = p.name ? usable.find((x) => titleMatchesName(x.page.title ?? '', p.name!)) : undefined
+  const chosen = named ?? usable[0]
+  return chosen?.info ? { ...chosen.info, nearby: true } : null
+}
+
 const cache = new Map<string, PhotoInfo | null>()
+/** メモリ層を消す（永続層は残す） */
 export function clearPhotoCache(): void {
   cache.clear()
+}
+
+/** 永続キャッシュ（v1.2）: 写真あり 30 日、「写真なし」は 3 日（あとから写真が登録されることがあるので短め） */
+export const PHOTO_PERSIST_TTL_MS = 30 * 24 * 60 * 60 * 1000
+export const PHOTO_NONE_PERSIST_TTL_MS = 3 * 24 * 60 * 60 * 1000
+export const PHOTO_PERSIST_MAX = 2_000
+let persistent: KvCache<PhotoInfo | null> | null | undefined
+
+function photoStore(): KvCache<PhotoInfo | null> | null {
+  return (persistent ??= createKvCache<PhotoInfo | null>({
+    namespace: 'photo',
+    ttlMs: PHOTO_PERSIST_TTL_MS,
+    ttlFor: (v) => (v ? PHOTO_PERSIST_TTL_MS : PHOTO_NONE_PERSIST_TTL_MS),
+    maxEntries: PHOTO_PERSIST_MAX,
+    maxEntriesLocalStorage: 300,
+  }))
+}
+
+/** テスト用: 永続層を差し替える（null = 永続層なし, undefined = 既定に戻す） */
+export function setPhotoPersistentCache(c: KvCache<PhotoInfo | null> | null | undefined): void {
+  persistent = c
 }
 
 export interface ResolvePhotosOptions extends RequestOptions {
@@ -264,7 +296,7 @@ export async function resolvePhotos(
 ): Promise<Map<string, PhotoInfo | null>> {
   const out = new Map<string, PhotoInfo | null>()
   const ck = (id: string) => `${width}|${id}`
-  const todo = places.filter((p) => {
+  let todo = places.filter((p) => {
     if (p.photoUrl) {
       out.set(p.id, { url: p.photoUrl })
       return false
@@ -277,6 +309,23 @@ export async function resolvePhotos(
   })
   if (todo.length === 0) return out
 
+  // メモリ → 永続（まとめて 1 回）→ ネットワーク
+  const store = photoStore()
+  if (store) {
+    const hit = await store.getMany(todo.map((p) => ck(p.id)))
+    if (opts.signal?.aborted) throw abortError()
+    todo = todo.filter((p) => {
+      if (!hit.has(ck(p.id))) return true
+      const v = hit.get(ck(p.id)) ?? null
+      cache.set(ck(p.id), v)
+      out.set(p.id, v)
+      return false
+    })
+    if (todo.length === 0) return out
+  }
+
+  /** 通信に失敗して「写真なし」と言い切れない place（永続化しない） */
+  const uncertain = new Set<string>()
   const titleOf = new Map<string, string>()
   for (const p of todo) {
     const t = commonsFileFromTags(p.tags)
@@ -284,30 +333,50 @@ export async function resolvePhotos(
   }
   const needWd = todo.filter((p) => !titleOf.has(p.id) && p.tags?.wikidata)
   if (needWd.length) {
+    const qid = (p: (typeof needWd)[number]) => p.tags!.wikidata!.split(';')[0].trim().toUpperCase()
     const p18 = await fetchWikidataP18(
       needWd.map((p) => p.tags!.wikidata!.split(';')[0]),
       opts,
     )
     for (const p of needWd) {
-      const t = p18.get(p.tags!.wikidata!.split(';')[0].trim().toUpperCase())
+      const t = p18.get(qid(p))
       if (t) titleOf.set(p.id, t)
+      else if (!p18.has(qid(p)) && /^Q\d+$/.test(qid(p))) uncertain.add(p.id)
     }
   }
-  const infos = titleOf.size ? await fetchCommonsImageInfo([...titleOf.values()], width, opts) : new Map()
+  const infos: Map<string, PhotoInfo | null> = titleOf.size ? await fetchCommonsImageInfo([...titleOf.values()], width, opts) : new Map()
   for (const p of todo) {
     const t = titleOf.get(p.id)
+    if (t && !infos.has(t)) uncertain.add(p.id)
     const info = t ? (infos.get(t) ?? null) : null
     if (info) out.set(p.id, info)
   }
   const rest = todo.filter((p) => !out.get(p.id) && p.category && NEARBY_PHOTO_CATEGORIES.has(p.category))
   if (nearby && rest.length) {
     await mapWithConcurrency(rest, NEARBY_CONCURRENCY, async (p) => {
-      out.set(p.id, await fetchCommonsNearby(p, width, opts))
+      try {
+        out.set(p.id, await commonsNearbyOrThrow(p, width, opts))
+      } catch (e) {
+        if (opts.signal?.aborted) throw e
+        out.set(p.id, null)
+        uncertain.add(p.id)
+      }
     })
   }
+  const persist: [string, PhotoInfo | null][] = []
   for (const p of todo) {
     if (!out.has(p.id)) out.set(p.id, null)
-    cache.set(ck(p.id), out.get(p.id) ?? null)
+    const v = out.get(p.id) ?? null
+    cache.set(ck(p.id), v)
+    if (v || !uncertain.has(p.id)) persist.push([ck(p.id), v])
   }
+  // 書き込みは待たない（表示を遅らせない）
+  if (store && persist.length) void store.setMany(persist)
   return out
+}
+
+function abortError(): Error {
+  const e = new Error('The operation was aborted')
+  e.name = 'AbortError'
+  return e
 }

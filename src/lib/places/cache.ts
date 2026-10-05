@@ -1,3 +1,4 @@
+import { globalIndexedDb, idbRequest as req, openChoichariDb, PLACES_STORE } from '../idb'
 import type { LatLng } from '../types'
 import type { SearchResult } from './index'
 
@@ -13,8 +14,7 @@ export const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000
 /** 保持する最大件数（古いものから捨てる） */
 export const CACHE_MAX_ENTRIES = 30
 const LS_PREFIX = 'choichari:v1:places:'
-const DB_NAME = 'choichari'
-const STORE = 'places'
+const STORE = PLACES_STORE
 
 /** 同じセルなら同じクエリになるよう中心をグリッドにスナップ */
 export function snapToGrid(p: LatLng, grid = CACHE_GRID_DEG): LatLng {
@@ -100,24 +100,9 @@ function safeLocalStorage(): Storage | null {
 // IndexedDB 実装（既定。数百件の POI でも localStorage の 5MB を圧迫しない）
 // ---------------------------------------------------------------------------
 
-function req<T>(r: IDBRequest<T>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    r.onsuccess = () => resolve(r.result)
-    r.onerror = () => reject(r.error)
-  })
-}
-
 export function createIndexedDbCache(idb: IDBFactory): PlacesCache {
-  let dbp: Promise<IDBDatabase> | null = null
-  const open = () =>
-    (dbp ??= new Promise<IDBDatabase>((resolve, reject) => {
-      const r = idb.open(DB_NAME, 1)
-      r.onupgradeneeded = () => {
-        if (!r.result.objectStoreNames.contains(STORE)) r.result.createObjectStore(STORE, { keyPath: 'key' })
-      }
-      r.onsuccess = () => resolve(r.result)
-      r.onerror = () => reject(r.error)
-    }))
+  // DB のバージョン管理は ../idb に集約（v1.2: kv store を追加して v2）
+  const open = () => openChoichariDb(idb)
   return {
     async get(key, now = Date.now()) {
       try {
@@ -148,10 +133,6 @@ export function createIndexedDbCache(idb: IDBFactory): PlacesCache {
 
 /** IndexedDB があればそれ、無ければ localStorage */
 export function createDefaultPlacesCache(): PlacesCache {
-  try {
-    if (typeof indexedDB !== 'undefined' && indexedDB) return createIndexedDbCache(indexedDB)
-  } catch {
-    /* fallthrough */
-  }
-  return createLocalStorageCache()
+  const idb = globalIndexedDb()
+  return idb ? createIndexedDbCache(idb) : createLocalStorageCache()
 }
