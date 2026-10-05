@@ -1,5 +1,8 @@
-# 都内（島しょ部を除く）の目的地データを事前生成して public/data/tokyo に commit し、Pages にデプロイする（v1.3）。
-# - Overpass（OSM）・Wikidata SPARQL・Wikimedia Commons を CI から叩く。User-Agent に連絡先（このリポジトリの Issues）を明記。
+# 都内（島しょ部を除く）の目的地データを事前生成して public/data/tokyo に commit し、Pages にデプロイする（v1.3 / v1.3.1）。
+# - OSM の主経路は Geofabrik の関東抽出 PBF ＋ osmium-tool（v1.3.1）。PBF は日付キーで actions/cache に置き、同じ日の再実行では再ダウンロードしない。
+#   Geofabrik / osmium が使えないときだけ Overpass（0.1° グリッド × カテゴリ群、間隔を空けて順次）にフォールバックする。
+# - Wikidata SPARQL が失敗したら OSM だけで、Commons が失敗したら写真なしで続行し、警告を Summary と index.json に出す。
+# - User-Agent に連絡先（このリポジトリの Issues）を明記。
 # - 健全性チェック（最低件数・前回比 -30%）に落ちたら commit しない（失敗データを公開しない）。
 # - GITHUB_TOKEN の push では deploy.yml の push トリガーが起動しないので、同じワークフローから deploy.yml を workflow_call で呼ぶ。
 name: Build Tokyo POI data
@@ -22,6 +25,11 @@ on:
         description: '前回比 -30% の健全性チェックを無効にする（意図的に件数を減らすときだけ）'
         type: boolean
         default: false
+      osm_source:
+        description: 'OSM の取得経路（auto = Geofabrik → 失敗時 Overpass / geofabrik = フォールバックしない / overpass）'
+        type: choice
+        options: [auto, geofabrik, overpass]
+        default: auto
 
 permissions:
   contents: read
@@ -33,7 +41,7 @@ concurrency:
 jobs:
   data:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
     permissions:
       contents: write
     outputs:
@@ -54,25 +62,55 @@ jobs:
       - name: Test the generator (fixtures)
         run: npx vitest run scripts
 
-      - name: Build data (Overpass + Wikidata + Commons)
+      - name: Date key for the Geofabrik cache
+        id: day
+        run: echo "day=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Geofabrik extract
+        uses: actions/cache@v4
+        with:
+          path: .cache/osm/kanto-latest.osm.pbf
+          key: geofabrik-kanto-${{ steps.day.outputs.day }}
+
+      - name: Download Geofabrik extract (kanto)
+        # 失敗してもジョブは続ける（スクリプトが Overpass にフォールバックする）
+        continue-on-error: true
+        env:
+          UA: choichari-build-poi/1.3 (${{ github.server_url }}/${{ github.repository }}/issues)
+        run: |
+          mkdir -p .cache/osm && cd .cache/osm
+          if [ -s kanto-latest.osm.pbf ]; then
+            echo "cache hit: $(du -h kanto-latest.osm.pbf | cut -f1)"
+            exit 0
+          fi
+          curl -fsSL --retry 3 --retry-delay 30 -A "$UA" -o kanto-latest.osm.pbf.md5 https://download.geofabrik.de/asia/japan/kanto-latest.osm.pbf.md5
+          curl -fSL --retry 3 --retry-delay 30 -A "$UA" -o kanto-latest.osm.pbf https://download.geofabrik.de/asia/japan/kanto-latest.osm.pbf
+          if ! md5sum -c kanto-latest.osm.pbf.md5; then
+            rm -f kanto-latest.osm.pbf
+            exit 1
+          fi
+          du -h kanto-latest.osm.pbf
+
+      - name: Install osmium-tool
+        continue-on-error: true
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q osmium-tool
+          osmium --version | head -1
+
+      - name: Build data (Geofabrik/osmium + Wikidata + Commons)
         env:
           POI_CONTACT: ${{ github.server_url }}/${{ github.repository }}/issues
           NEARBY_LIMIT: ${{ inputs.nearby_limit || '300' }}
+          OSM_SOURCE: ${{ inputs.osm_source || 'auto' }}
           NO_PHOTOS: ${{ inputs.no_photos && '--no-photos' || '' }}
           ALLOW_SHRINK: ${{ inputs.allow_shrink && '--allow-shrink' || '' }}
-        run: npx tsx scripts/build-poi/main.ts --out public/data/tokyo --nearby-limit "$NEARBY_LIMIT" $NO_PHOTOS $ALLOW_SHRINK
-
-      - name: Summary
-        if: always()
         run: |
-          if [ -f public/data/tokyo/index.json ]; then
-            node -e '
-              const i = require("./public/data/tokyo/index.json");
-              const s = [`## Tokyo POI data`, ``, `- version: ${i.version}${i.sample ? " (sample)" : ""}`, `- generatedAt: ${i.generatedAt}`,
-                `- places: ${i.count} / tiles: ${Object.keys(i.tiles).length} / ${(i.bytes/1024/1024).toFixed(2)} MiB`, ``, "```json", JSON.stringify(i.stats, null, 1), "```"];
-              require("fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY, s.join("\n") + "\n");
-            '
-          fi
+          TIME=""; [ -x /usr/bin/time ] && TIME="/usr/bin/time -v"
+          $TIME npx tsx scripts/build-poi/main.ts --out public/data/tokyo \
+            --pbf .cache/osm/kanto-latest.osm.pbf --work-dir "$RUNNER_TEMP/osm-work" --osm-source "$OSM_SOURCE" \
+            --nearby-limit "$NEARBY_LIMIT" $NO_PHOTOS $ALLOW_SHRINK 2> >(tee "$RUNNER_TEMP/build-poi.err" >&2)
+          grep -E "Elapsed \(wall clock\)|Maximum resident set size" "$RUNNER_TEMP/build-poi.err" || true
 
       - name: Commit and push to main
         id: commit

@@ -23,8 +23,8 @@ export const SMALL_PARK_NAME_RE = /児童遊園|ちびっこ|児童公園|ポケ
 const WATERSIDE_NAME_RE = /河川敷|親水|水辺|湖畔|川沿い/
 const SEASIDE_NAME_RE = /海浜|海岸|ビーチ|臨海|浜/
 
-type SelectorKind = 'node' | 'area' | 'park'
-interface Selector {
+export type SelectorKind = 'node' | 'area' | 'park'
+export interface Selector {
   /** node: node のみ / area: way+relation / park: way+relation で bounds が必要 */
   kinds: SelectorKind[]
   filter: string
@@ -90,9 +90,9 @@ export function buildOverpassQuery(center: LatLng, radiusKm: number): string {
  * OVERPASS_SELECTORS を 1 本のクエリにまとめる（bbox 版と area 版の共通部分）。
  * scope は各セレクタの末尾に付ける絞り込み（例: "(area.tokyo)"）。
  */
-export function buildSelectorQuery(header: string, scope: string, prelude: string[] = []): string {
+export function buildSelectorQuery(header: string, scope: string, prelude: string[] = [], selectors: readonly Selector[] = OVERPASS_SELECTORS): string {
   const group = (kind: SelectorKind) =>
-    OVERPASS_SELECTORS.filter((s) => s.kinds.includes(kind)).flatMap((s) =>
+    selectors.filter((s) => s.kinds.includes(kind)).flatMap((s) =>
       kind === 'node' ? [`node${s.filter}${scope};`] : [`way${s.filter}${scope};`, `relation${s.filter}${scope};`],
     )
   return [

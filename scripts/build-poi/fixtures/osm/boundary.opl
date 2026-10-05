@@ -1,0 +1,14 @@
+n1026 T x139 y35.55
+n1027 T x139.92 y35.55
+n1028 T x139.92 y35.9
+n1029 T x139 y35.9
+n1030 T x139 y35.7
+n1031 T x139.35 y34.7
+n1032 T x139.45 y34.7
+n1033 T x139.45 y34.8
+n1034 T x139.35 y34.8
+w2101 Tboundary=administrative Nn1026,n1027
+w2102 T Nn1027,n1028,n1029
+w2103 T Nn1026,n1030,n1029
+w2104 T Nn1031,n1032,n1033,n1034,n1031
+r3101 Ttype=boundary,boundary=administrative,admin_level=4,name=%6771%%4eac%%90fd%,ISO3166-2=JP-13 Mw2101@outer,w2102@outer,w2103@outer,w2104@outer

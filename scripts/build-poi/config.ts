@@ -12,17 +12,22 @@ export const WIKIDATA_TOKYO = 'Q1490'
 /** これより南は伊豆諸島・小笠原（除外） */
 export const MAINLAND_MIN_LAT = 35.4
 /** 東京都本土のおおよその範囲（Wikidata 座標フィルタ・健全性チェック用） [s, w, n, e] */
-export const MAINLAND_BBOX: [number, number, number, number] = [35.48, 138.9, 35.92, 139.93]
+export const MAINLAND_BBOX: [number, number, number, number] = [35.45, 138.85, 35.95, 139.95]
 /** 統合の基準点（距離計算に使うだけ。東京駅） */
 export const TOKYO_STATION = { lat: 35.6812, lng: 139.7671 }
 
-export const OVERPASS_TIMEOUT_S = 180
-/** CI からのエンドポイント（失敗したら次へ） */
+/** CI からの Overpass エンドポイント（v1.3.1 からはフォールバック専用。失敗したら次へ） */
 export const BUILD_OVERPASS_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.private.coffee/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
 ] as const
+/** OSM の主経路（v1.3.1）: Geofabrik の関東抽出 PBF ＋ osmium-tool */
+export const GEOFABRIK_KANTO_URL = 'https://download.geofabrik.de/asia/japan/kanto-latest.osm.pbf'
+/** Overpass フォールバックのグリッド (度) とクエリ間隔 (ms) */
+export const OVERPASS_GRID_DEG = 0.1
+export const OVERPASS_GRID_GAP_MS = 5_000
+export const OVERPASS_GRID_TIMEOUT_S = 90
 export const WIKIDATA_SPARQL_ENDPOINT = 'https://query.wikidata.org/sparql'
 
 /**

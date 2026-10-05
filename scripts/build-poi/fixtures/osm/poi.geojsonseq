@@ -1,0 +1,14 @@
+{"type":"Feature","geometry":{"type":"Point","coordinates":[139.7647,35.6798]},"properties":{"@type":"node","@id":1001,"name":"KITTEガーデン","tourism":"viewpoint"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[139.7645,35.6815]},"properties":{"@type":"node","@id":1002,"name":"スターバックス","amenity":"cafe","brand":"スターバックス"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[139.766,35.682]},"properties":{"@type":"node","@id":1003,"amenity":"cafe"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[139.77,35.69]},"properties":{"@type":"node","@id":1004,"name":"喫茶テスト","amenity":"cafe"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[139.7765,35.7188]},"properties":{"@type":"node","@id":1006,"name":"東京国立博物館","tourism":"museum"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[139.7,35.52]},"properties":{"@type":"node","@id":1008,"name":"川崎の展望台","tourism":"viewpoint"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[139.76,35.67]},"properties":{"@type":"node","@id":1009,"name":"大きな神社","amenity":"place_of_worship","religion":"shinto"}}
+{"type":"Feature","geometry":{"type":"LineString","coordinates":[[139.7538,35.6715],[139.7582,35.6715],[139.7582,35.6755],[139.7538,35.6755],[139.7538,35.6715]]},"properties":{"@type":"way","@id":2001,"name":"日比谷公園","leisure":"park","wikidata":"Q900001"}}
+{"type":"Feature","geometry":{"type":"LineString","coordinates":[[139.77,35.688],[139.7702,35.688],[139.7702,35.6882],[139.77,35.6882],[139.77,35.688]]},"properties":{"@type":"way","@id":2002,"name":"小さな公園","leisure":"park"}}
+{"type":"Feature","geometry":{"type":"LineString","coordinates":[[139.7394,35.6745],[139.7396,35.6745],[139.7396,35.6747],[139.7394,35.6747],[139.7394,35.6745]]},"properties":{"@type":"way","@id":2003,"name":"日枝神社","amenity":"place_of_worship","religion":"shinto"}}
+{"type":"Feature","geometry":{"type":"MultiPolygon","coordinates":[[[[139.7538,35.6715],[139.7582,35.6715],[139.7582,35.6755],[139.7538,35.6755],[139.7538,35.6715]]]]},"properties":{"@type":"way","@id":2001,"name":"日比谷公園","leisure":"park","wikidata":"Q900001"}}
+{"type":"Feature","geometry":{"type":"MultiPolygon","coordinates":[[[[139.77,35.688],[139.7702,35.688],[139.7702,35.6882],[139.77,35.6882],[139.77,35.688]]]]},"properties":{"@type":"way","@id":2002,"name":"小さな公園","leisure":"park"}}
+{"type":"Feature","geometry":{"type":"MultiPolygon","coordinates":[[[[139.7394,35.6745],[139.7396,35.6745],[139.7396,35.6747],[139.7394,35.6747],[139.7394,35.6745]]]]},"properties":{"@type":"way","@id":2003,"name":"日枝神社","amenity":"place_of_worship","religion":"shinto"}}
+{"type":"Feature","geometry":{"type":"MultiPolygon","coordinates":[[[[139.76,35.658],[139.766,35.658],[139.766,35.662],[139.76,35.662],[139.76,35.658]]]]},"properties":{"@type":"relation","@id":3001,"name":"浜離宮恩賜庭園","leisure":"garden"}}

@@ -18,6 +18,11 @@ export interface BuildInput {
   nearbyLimit?: number
   generatedAt: string
   sample?: boolean
+  /** 呼び出し側で出た警告（Wikidata 失敗・OSM の取得経路など） */
+  warnings?: string[]
+  osm?: StaticIndex['osm']
+  /** 警告の数値版（stats に warn_* として入れる） */
+  warnStats?: Record<string, number>
   log?: (msg: string) => void
 }
 
@@ -64,10 +69,20 @@ export async function buildDataset(input: BuildInput): Promise<BuildOutput> {
   for (const d of pois) d.score = appealScore(d)
   pois = dedupePois(pois)
   log(`dedupe: ${pois.length} places`)
+  const warnings = [...(input.warnings ?? [])]
   let photoStats: Record<string, number> = {}
   if (input.photos) {
     const ps = await attachPhotos(pois, input.photos, { nearbyLimit: input.nearbyLimit ?? 0, log })
     photoStats = { photoFiles: ps.titles, nearbyTried: ps.nearbyTried }
+    // Commons が失敗しても写真なしで続行する（警告を残す）
+    if (ps.infoFailed) {
+      photoStats.warn_commons_imageinfo_failed = ps.infoFailed
+      warnings.push(`Commons imageinfo に失敗: ${ps.infoFailed}/${ps.titles} ファイル（写真なしで続行）`)
+    }
+    if (ps.nearbyErrors) {
+      photoStats.warn_commons_nearby_errors = ps.nearbyErrors
+      warnings.push(`Commons 近傍検索の失敗: ${ps.nearbyErrors} 件${ps.nearbyAborted ? '（連続失敗で打ち切り）' : ''}`)
+    }
     for (const d of pois) d.score = appealScore(d)
   }
   coverage ??= cellsCoverage(pois)
@@ -81,6 +96,8 @@ export async function buildDataset(input: BuildInput): Promise<BuildOutput> {
     coverage,
     generatedAt: input.generatedAt,
     sample: input.sample,
+    warnings,
+    osm: input.osm,
     stats: {
       osm: stats.osm,
       wikidata: stats.wikidata,
@@ -89,7 +106,9 @@ export async function buildDataset(input: BuildInput): Promise<BuildOutput> {
       wikidataOnly: stats.wikidataOnly,
       withPhoto: pois.filter((d) => d.photo).length,
       ...photoStats,
+      ...(input.warnStats ?? {}),
       ...byCat,
+      ...(warnings.length ? { warn_count: warnings.length } : {}),
     },
   })
   return { pois, tiles, index }

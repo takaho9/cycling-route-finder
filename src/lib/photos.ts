@@ -229,8 +229,8 @@ export async function fetchCommonsNearby(
   }
 }
 
-/** fetchCommonsNearby の本体。通信失敗は throw（「写真なし」と区別して永続化しないため） */
-async function commonsNearbyOrThrow(
+/** fetchCommonsNearby の本体。通信失敗は throw（「写真なし」と区別して永続化しないため。事前生成でも失敗の検知に使う） */
+export async function commonsNearbyOrThrow(
   p: { lat: number; lng: number; name?: string },
   width: number,
   opts: RequestOptions,

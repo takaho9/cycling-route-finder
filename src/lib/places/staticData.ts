@@ -84,8 +84,12 @@ export interface StaticIndex {
   tiles: Record<string, number>
   coverage: StaticCoverage
   sources: StaticSource[]
-  /** カテゴリ別件数・写真件数など（ログ・確認用） */
+  /** カテゴリ別件数・写真件数など（ログ・確認用）。warn_* は警告 */
   stats?: Record<string, number>
+  /** 生成時の警告（Wikidata / Commons の失敗、OSM の取得経路のフォールバックなど） */
+  warnings?: string[]
+  /** OSM データの出どころと時点 */
+  osm?: { source: 'geofabrik' | 'overpass' | 'fixture'; timestamp?: string }
 }
 
 const EPS = 1e-9

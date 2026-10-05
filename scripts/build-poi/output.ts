@@ -66,9 +66,11 @@ export interface BuildIndexInput {
   generatedAt: string
   sample?: boolean
   stats?: Record<string, number>
+  warnings?: string[]
+  osm?: StaticIndex['osm']
 }
 
-export function buildIndex({ tiles, coverage, generatedAt, sample, stats }: BuildIndexInput): StaticIndex {
+export function buildIndex({ tiles, coverage, generatedAt, sample, stats, warnings, osm }: BuildIndexInput): StaticIndex {
   const hash = createHash('sha1')
   const counts: Record<string, number> = {}
   let bytes = 0
@@ -94,6 +96,8 @@ export function buildIndex({ tiles, coverage, generatedAt, sample, stats }: Buil
     coverage,
     sources: DATA_SOURCES,
     ...(stats ? { stats } : {}),
+    ...(warnings?.length ? { warnings } : {}),
+    ...(osm ? { osm } : {}),
   }
 }
 

@@ -62,7 +62,10 @@ npm run screenshots  # docs/screenshots/ を撮り直す（要: npm run build、
 
 出発地が都内（島しょ部を除く）のときは、ブラウザから Overpass を叩かず、事前に生成した静的 JSON（`public/data/tokyo/`）を読みます。都外・データ取得失敗のときは従来どおり Overpass（＋端末内キャッシュ）にフォールバックします。
 
-- 生成: `.github/workflows/build-data.yml`（毎週月曜 04:17 JST ＋ 手動実行）が `scripts/build-poi/`（Overpass 1 回・Wikidata SPARQL・Commons imageinfo）を実行し、差分があれば `main` に commit して、`deploy.yml` を `workflow_call` で呼んでデプロイします。
+- 生成: `.github/workflows/build-data.yml`（毎週月曜 04:17 JST ＋ 手動実行）が `scripts/build-poi/` を実行し、差分があれば `main` に commit して、`deploy.yml` を `workflow_call` で呼んでデプロイします。
+  - OSM: [Geofabrik](https://download.geofabrik.de/asia/japan.html) の関東抽出 PBF（日付キーで actions/cache）を osmium-tool で `extract`（都内 bbox）→ `tags-filter`（既存セレクタの主タグ）→ `export`（GeoJSON Seq）し、Node で既存のセレクタ条件・カテゴリ判定・ノイズ除外に流します。東京都の境界も同じ PBF から取ります。
+  - Geofabrik / osmium が使えないときだけ Overpass に 0.1° グリッド × カテゴリ群で順に問い合わせます（全域 1 クエリは公開サーバには重すぎるため）。
+  - Wikidata SPARQL が失敗したら OSM だけで、Commons が失敗したら写真なしで続行し、警告をジョブの Summary と `index.json`（`warnings` / `stats.warn_*`）に残します。
 - 形式: 0.05° グリッドのタイル `t_<lat×100>_<lng×100>.json` と `index.json`（タイル一覧・件数・生成日時・データ源・対象範囲ポリゴン）。形式の定義は `src/lib/places/staticData.ts`。
 - 健全性チェック: 最低件数（3000）と前回比 -30% 以上の減少で失敗（commit しない）。
 - 手元では外部に出ずに fixture から作れます: `npm run build:data:sample`（東京駅周辺のサンプル。`"sample": true` でアプリはデモ扱いで表示）。
