@@ -172,3 +172,36 @@ describe('C16: service worker update is a prompt', () => {
     expect(getUpdateReady()).not.toBeNull()
   })
 })
+
+describe('P2: records and settings', () => {
+  it('D18: records sheet marks today and says "あと1回で目標クリア！"; D19: credits are folded in <details>', () => {
+    mockGeolocation(TOKYO)
+    localStorage.setItem(
+      STORAGE_KEYS.rides,
+      JSON.stringify([
+        { date: '2026-10-05', placeId: 'a', name: '等々力渓谷', minutes: 60, category: 'park' },
+        { date: '2026-10-06', placeId: 'b', name: '湯島天満宮', minutes: 45, category: 'shrine' },
+      ]),
+    )
+    render(<App services={demoServices} now={() => NOW} />)
+    fireEvent.click(screen.getByRole('button', { name: 'きろく。2日連続' }))
+    const rec = screen.getByRole('dialog', { name: 'きろく' })
+    const today = rec.querySelector('[aria-current="date"]')!
+    expect(today.textContent).toContain('水')
+    expect(today.textContent).toContain('今日')
+    expect(within(rec).getByText('あと1回で目標クリア！')).toBeTruthy()
+    fireEvent.click(within(rec).getByRole('button', { name: '閉じる' }))
+
+    fireEvent.click(screen.getByRole('button', { name: '設定' }))
+    const set = screen.getByRole('dialog', { name: '設定' })
+    const details = set.querySelector('details.credits-details') as HTMLDetailsElement
+    expect(details.open).toBe(false)
+    expect(within(details).getByText('© OpenStreetMap contributors (ODbL)')).toBeTruthy()
+  })
+
+  it('D20: with no streak the header button is labelled "きろく"', () => {
+    mockGeolocation(TOKYO)
+    render(<App services={demoServices} now={() => NOW} />)
+    expect(screen.getByRole('button', { name: 'きろく' }).textContent).toContain('きろく')
+  })
+})

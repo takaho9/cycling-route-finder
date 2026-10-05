@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { CREDITS, NON_COMMERCIAL_NOTE, PRIVACY_DESTINATIONS, PRIVACY_SUMMARY } from '../lib/credits'
 import { SPEED_PRESETS, type SpeedPresetId } from '../lib/reach'
 import { BottomSheet } from './BottomSheet'
@@ -24,14 +25,15 @@ export function SettingsSheet({
   origin: Origin | null
   onChangeOrigin: () => void
 }) {
+  const ids = { speed: useId(), goal: useId(), origin: useId(), credit: useId(), privacy: useId() }
   return (
     <BottomSheet open={open} onClose={onClose} title="設定" snap="full" className="settings">
-      <section className="set-section" aria-labelledby="speed-title">
-        <h3 id="speed-title" className="set-section__title">
+      <section className="set-section" aria-labelledby={ids.speed}>
+        <h3 id={ids.speed} className="set-section__title">
           はやさ
         </h3>
         <p className="set-section__desc">だいたいの巡航スピードを選んでね</p>
-        <div className="speed-options" role="radiogroup" aria-labelledby="speed-title">
+        <div className="speed-options" role="radiogroup" aria-labelledby={ids.speed}>
           {Object.values(SPEED_PRESETS).map((p) => (
             <button
               key={p.id}
@@ -51,8 +53,8 @@ export function SettingsSheet({
         </div>
       </section>
 
-      <section className="set-section" aria-labelledby="goal-title">
-        <h3 id="goal-title" className="set-section__title">
+      <section className="set-section" aria-labelledby={ids.goal}>
+        <h3 id={ids.goal} className="set-section__title">
           週の目標
         </h3>
         <div className="stepper">
@@ -80,8 +82,8 @@ export function SettingsSheet({
         </div>
       </section>
 
-      <section className="set-section" aria-labelledby="origin-title">
-        <h3 id="origin-title" className="set-section__title">
+      <section className="set-section" aria-labelledby={ids.origin}>
+        <h3 id={ids.origin} className="set-section__title">
           出発地
         </h3>
         <button type="button" className="set-row pressable" onClick={onChangeOrigin}>
@@ -92,24 +94,28 @@ export function SettingsSheet({
         </button>
       </section>
 
-      <section className="set-section" aria-labelledby="credit-title">
-        <h3 id="credit-title" className="set-section__title">
-          クレジット
-        </h3>
-        <ul className="credits">
-          {CREDITS.map((c) => (
-            <li key={c.role}>
-              <span className="credits__role">{c.role}</span>
-              <a href={c.href} target="_blank" rel="noopener">
-                {c.text}
-              </a>
-            </li>
-          ))}
-        </ul>
+      {/* クレジットは折りたたみ（BACKLOG-2 D19）。中身は常に DOM にあり、展開すると読める */}
+      <section className="set-section" aria-labelledby={ids.credit}>
+        <details className="credits-details">
+          <summary className="set-section__title credits-details__summary">
+            <span id={ids.credit}>クレジット</span>
+            <span className="credits-details__hint">OpenStreetMap・Open-Meteo ほか</span>
+          </summary>
+          <ul className="credits">
+            {CREDITS.map((c) => (
+              <li key={c.role}>
+                <span className="credits__role">{c.role}</span>
+                <a href={c.href} target="_blank" rel="noopener">
+                  {c.text}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </details>
       </section>
 
-      <section className="set-section" aria-labelledby="privacy-title">
-        <h3 id="privacy-title" className="set-section__title">
+      <section className="set-section" aria-labelledby={ids.privacy}>
+        <h3 id={ids.privacy} className="set-section__title">
           プライバシー
         </h3>
         <p className="set-section__desc">{PRIVACY_SUMMARY}</p>

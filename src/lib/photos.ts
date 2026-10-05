@@ -11,6 +11,8 @@ export const NEARBY_RADIUS_M = 100
 const NEARBY_CONCURRENCY = 4
 
 export const WIKIDATA_API = 'https://www.wikidata.org/w/api.php'
+/** Wikidata Query Service（CORS 可）。P18 だけを取る（BACKLOG-2 C15） */
+export const WIKIDATA_SPARQL = 'https://query.wikidata.org/sparql'
 export const COMMONS_API = 'https://commons.wikimedia.org/w/api.php'
 
 export interface PhotoInfo {
@@ -84,23 +86,69 @@ interface WbEntities {
   entities?: Record<string, { claims?: { P18?: { mainsnak?: { datavalue?: { value?: unknown } } }[] } }>
 }
 
-/** wikidata QID 群 → P18 ファイル名（最大 50 件/リクエストでバッチ, BACKLOG Y5） */
+interface SparqlResponse {
+  results?: { bindings?: { item?: { value?: string }; image?: { value?: string } }[] }
+}
+
+/** SPARQL: 指定 QID の P18（画像）だけを返すクエリ */
+export function buildP18Sparql(qids: readonly string[]): string {
+  return `SELECT ?item ?image WHERE { VALUES ?item { ${qids.map((q) => `wd:${q}`).join(' ')} } ?item wdt:P18 ?image . }`
+}
+
+/** "http://commons.wikimedia.org/wiki/Special:FilePath/Foo%20bar.jpg" → "File:Foo bar.jpg" */
+export function fileTitleFromFilePath(url: string): string | null {
+  const m = /Special:FilePath\/([^?#]+)$/.exec(url)
+  if (!m) return null
+  try {
+    return normalizeFileTitle(decodeURIComponent(m[1]))
+  } catch {
+    return null
+  }
+}
+
+async function p18BySparql(chunk: readonly string[], opts: RequestOptions): Promise<Map<string, string | null>> {
+  const url = `${WIKIDATA_SPARQL}?format=json&query=${encodeURIComponent(buildP18Sparql(chunk))}`
+  const json = await fetchJson<SparqlResponse>(url, { headers: { Accept: 'application/sparql-results+json' } }, { timeoutMs: 8_000, ...opts })
+  const out = new Map<string, string | null>(chunk.map((q) => [q, null]))
+  for (const b of json.results?.bindings ?? []) {
+    const q = b.item?.value?.split('/').pop()
+    const t = b.image?.value ? fileTitleFromFilePath(b.image.value) : null
+    if (q && t && out.get(q) === null) out.set(q, t)
+  }
+  return out
+}
+
+async function p18ByEntities(chunk: readonly string[], opts: RequestOptions): Promise<Map<string, string | null>> {
+  const url = `${WIKIDATA_API}?action=wbgetentities&ids=${chunk.join('|')}&props=claims&format=json&origin=*`
+  const json = await fetchJson<WbEntities>(url, undefined, { timeoutMs: 8_000, ...opts })
+  const out = new Map<string, string | null>()
+  for (const q of chunk) {
+    const v = json.entities?.[q]?.claims?.P18?.[0]?.mainsnak?.datavalue?.value
+    out.set(q, typeof v === 'string' && v ? normalizeFileTitle(v) : null)
+  }
+  return out
+}
+
+/**
+ * wikidata QID 群 → P18 ファイル名（最大 50 件/リクエストでバッチ, BACKLOG Y5）。
+ * SPARQL で P18 だけを取る（全 claims を返す wbgetentities より軽い, C15）。SPARQL が落ちていたら wbgetentities で代替。
+ */
 export async function fetchWikidataP18(qids: readonly string[], opts: RequestOptions = {}): Promise<Map<string, string | null>> {
   const ids = [...new Set(qids.map((q) => q.trim().toUpperCase()).filter((q) => /^Q\d+$/.test(q)))]
   const out = new Map<string, string | null>()
   for (let i = 0; i < ids.length; i += WIKI_BATCH) {
     const chunk = ids.slice(i, i + WIKI_BATCH)
-    const url = `${WIKIDATA_API}?action=wbgetentities&ids=${chunk.join('|')}&props=claims&format=json&origin=*`
-    try {
-      const json = await fetchJson<WbEntities>(url, undefined, { timeoutMs: 8_000, ...opts })
-      for (const q of chunk) {
-        const v = json.entities?.[q]?.claims?.P18?.[0]?.mainsnak?.datavalue?.value
-        out.set(q, typeof v === 'string' && v ? normalizeFileTitle(v) : null)
+    let got: Map<string, string | null> | null = null
+    for (const source of [p18BySparql, p18ByEntities]) {
+      try {
+        got = await source(chunk, opts)
+        break
+      } catch (e) {
+        if (opts.signal?.aborted) throw e
+        if (!isAbortError(e)) console.warn('[photos] wikidata failed', e)
       }
-    } catch (e) {
-      if (opts.signal?.aborted) throw e
-      if (!isAbortError(e)) console.warn('[photos] wikidata failed', e)
     }
+    got?.forEach((v, k) => out.set(k, v))
   }
   return out
 }

@@ -5,17 +5,18 @@
 
 - 時間ダイヤル（15分〜1時間30分）と速度プリセット（のんびり 12 / ふつう 16 / 速め 20 km/h）から片道の到達距離を計算
 - 「今日のおすすめ」3件（日替わり・まだ行っていない場所を優先）から直接出発、残りは「もっと見る」で一覧（高低差・カテゴリで絞り込み、並び替え）
-- 高低差は 🟢フラット / 🟡ゆるアップダウン / 🔴ヒルクライム（一覧は直線での推定、詳細を開くと経路に沿って確定）
+- カードには「⏱ 40分 · 片道5.4km」（走行時間の目安は 5 分単位）。距離・時間はカード・ガチャ・詳細で同じ計算（詳細で経路が取れたら一覧にも反映）
+- 高低差は 🟢フラット / 🟡ゆるアップダウン / 🔴ヒルクライム（一覧は直線での推定で「≈」付き、詳細を開いて経路が取れると経路に沿って確定）
 - 迷ったら「おまかせ」ガチャ
 - 走った記録・連続日数・今週の目標・スタンプ帳（端末内に保存）。出発後に戻ると「行ってきた？」と聞いてくれる
 - 日没までの残り時間を表示（端末内で計算）
-- ホーム画面に追加して使える PWA（オフライン時は前回の候補を表示）
+- ホーム画面に追加して使える PWA（オフライン時は、出発地が 1km 以内なら前回の候補を表示。新しい版は「新しいバージョンがあります」から更新）
 
 ## 使い方
 
 1. アプリを開くと現在地を取得します（許可しない場合は駅名・住所で出発地を選ぶか「デモで試す（東京駅）」）。
 2. ダイヤルで往復の時間を選び「候補を見る」。
-3. おすすめカードの「Googleマップで出発」をタップ（片道 / 往復は詳細で切替。既定は往復）。
+3. おすすめカードの「Googleマップで出発」をタップ（片道 / 往復は詳細で切替。既定は往復。駅名などで出発地を選んだときは、その出発地から経路を開きます）。
 4. 帰ってきたら「行ってきた？」で ✓走った → スタンプとストリークが増えます。
 
 `?demo=1` を付けるとネットワークに一切出ずにデモデータで動きます（スクリーンショット・動作確認用）。
@@ -26,7 +27,7 @@
 
 ## 開発
 
-Node.js 20 以上（CI は 22）。
+Node.js 22.12 以上（Vite 8 / Vitest 5 の要件。CI も 22）。
 
 ```sh
 npm ci
@@ -66,7 +67,7 @@ npm run screenshots  # docs/screenshots/ を撮り直す（要: npm run build、
 | 行き先（POI） | [Overpass API](https://wiki.openstreetmap.org/wiki/Overpass_API)（overpass-api.de ほか） | © OpenStreetMap contributors（ODbL） |
 | 標高 | [Open-Meteo Elevation API](https://open-meteo.com/en/docs/elevation-api) | Elevation data: Open-Meteo（CC BY 4.0） |
 | 経路（自転車） | [routing.openstreetmap.de](https://routing.openstreetmap.de/)（OSRM） | Routing: FOSSGIS e.V. / © OpenStreetMap contributors |
-| 写真 | [Wikidata](https://www.wikidata.org/) / [Wikimedia Commons](https://commons.wikimedia.org/) | 写真ごとに作者・ライセンスを表示 |
+| 写真 | [Wikidata](https://www.wikidata.org/)（Query Service で P18 のみ）/ [Wikimedia Commons](https://commons.wikimedia.org/) | 写真ごとに作者・ライセンスを表示（近くで撮られた写真は「付近の写真」） |
 | 地名検索 | [Nominatim](https://nominatim.org/)（確定時のみ・1 秒 1 件） | © OpenStreetMap contributors |
 | ナビ | Google マップ（[Maps URLs](https://developers.google.com/maps/documentation/urls/get-started) で開くだけ） | — |
 | 数字フォント | [Outfit](https://fonts.google.com/specimen/Outfit)（同梱） | SIL Open Font License 1.1 |
@@ -81,5 +82,5 @@ npm run screenshots  # docs/screenshots/ を撮り直す（要: npm run build、
 
 - アカウント・サーバー・解析ツール・広告はありません。
 - 位置情報は端末の中で使い、候補さがしに必要なぶんだけ**丸めた座標**を上記の公開 API に送ります（Overpass は約 1km 単位のグリッド、標高・経路は約 11m 単位、地名の逆引きは約 100m 単位）。
-- Google マップには、出発ボタンを押したときだけ目的地（往復なら出発地も）を URL で渡します。
+- Google マップには、出発ボタンを押したときだけ目的地（往復のとき・出発地を手動で選んだときは出発地も）を URL で渡します。
 - 走った記録・お気に入り・設定・検索キャッシュはこの端末（localStorage / IndexedDB）にだけ保存されます。ブラウザのサイトデータを消すと削除されます。

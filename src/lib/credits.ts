@@ -31,8 +31,8 @@ export const PRIVACY_DESTINATIONS: readonly PrivacyDestination[] = [
   { host: 'api.open-meteo.com', what: '候補までの道のりの座標（約11m単位）' },
   { host: 'routing.openstreetmap.de', what: '出発地と目的地（約11m単位、詳細を開いたときだけ）' },
   { host: 'nominatim.openstreetmap.org', what: '入力した地名／現在地の地名（約100m単位）' },
-  { host: 'wikidata.org / commons.wikimedia.org', what: '行き先の ID と座標（写真さがし）' },
-  { host: 'Google マップ', what: '出発ボタンを押したときの目的地（往復なら出発地も）' },
+  { host: 'query.wikidata.org / commons.wikimedia.org', what: '行き先の ID と座標（写真さがし）' },
+  { host: 'Google マップ', what: '出発ボタンを押したときの目的地（往復のとき・出発地を手動で選んだときは出発地も）' },
 ]
 
 export const PRIVACY_SUMMARY =

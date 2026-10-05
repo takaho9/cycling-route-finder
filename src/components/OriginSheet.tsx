@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { PRESET_ORIGINS, type GeocodeHit } from '../lib/geocode'
 import type { Services } from '../lib/services'
 import { loadRecentOrigins } from '../lib/storage'
@@ -24,6 +24,7 @@ export function OriginSheet({
   onLocate: () => void
   onChoose: (o: Origin) => void
 }) {
+  const inputId = useId()
   const [q, setQ] = useState('')
   const [hits, setHits] = useState<GeocodeHit[] | null>(null)
   const [busy, setBusy] = useState(false)
@@ -53,11 +54,11 @@ export function OriginSheet({
   return (
     <BottomSheet open={open} onClose={onClose} title="出発地をえらぶ" snap="full" className="origin">
       <form className="origin__search" role="search" onSubmit={submit}>
-        <label htmlFor="origin-q" className="visually-hidden">
+        <label htmlFor={inputId} className="visually-hidden">
           住所・駅名
         </label>
         <input
-          id="origin-q"
+          id={inputId}
           type="search"
           enterKeyHint="search"
           placeholder="住所・駅名（例: 二子玉川駅）"

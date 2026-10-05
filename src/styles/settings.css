@@ -207,3 +207,36 @@
   color: var(--c-text-sub);
   font-size: var(--fs-caption);
 }
+
+/* クレジットは <details> にまとめる（BACKLOG-2 D19） */
+.credits-details__summary {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 var(--sp-2);
+  min-height: var(--tap);
+  padding: var(--sp-2) 0;
+  cursor: pointer;
+  list-style: none;
+}
+.credits-details__summary::-webkit-details-marker {
+  display: none;
+}
+.credits-details__summary::after {
+  content: '';
+  width: 7px;
+  height: 7px;
+  margin-left: auto;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-3px) rotate(45deg);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.credits-details[open] .credits-details__summary::after {
+  transform: translateY(1px) rotate(-135deg);
+}
+.credits-details__hint {
+  color: var(--c-text-sub);
+  font-size: var(--fs-caption);
+  font-weight: 500;
+}

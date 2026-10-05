@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import { useId, type CSSProperties } from 'react'
 import { CATEGORY_META, CATEGORY_ORDER } from '../lib/categories'
 import { hashString } from '../lib/random'
 import { toDateKey, weekActivity, type RideRecord } from '../lib/storage'
@@ -35,7 +35,11 @@ export function RecordsSheet({
   today: Date
   onDeleteRide: (placeId: string, date: string) => void
 }) {
+  const weekTitle = useId()
+  const stampTitle = useId()
+  const recentTitle = useId()
   const week = weekActivity(rides, today)
+  const left = Math.max(0, weeklyGoal - weekCount)
   const todayKey = toDateKey(today)
   const goalDone = weekCount >= weeklyGoal
   const collected = new Set(stamps.map((s) => s.category ?? 'other'))
@@ -70,17 +74,22 @@ export function RecordsSheet({
         )}
       </div>
 
-      <section className="rec-section" aria-labelledby="week-title">
-        <h3 id="week-title" className="rec-section__title">
+      <section className="rec-section" aria-labelledby={weekTitle}>
+        <h3 id={weekTitle} className="rec-section__title">
           今週
         </h3>
         <ol className="week">
           {week.map((d, i) => {
             const state = d.rode === null ? 'future' : d.rode ? 'rode' : 'rest'
             return (
-              <li key={d.date} className={`week__day week__day--${state}${d.date === todayKey ? ' is-today' : ''}`}>
+              <li
+                key={d.date}
+                className={`week__day week__day--${state}${d.date === todayKey ? ' is-today' : ''}`}
+                aria-current={d.date === todayKey ? 'date' : undefined}
+              >
                 <span className="week__label">{WEEKDAYS[i]}</span>
                 <span className="week__dot" aria-label={state === 'rode' ? '走った' : state === 'rest' ? 'お休み' : 'これから'} />
+                {d.date === todayKey && <span className="week__today">今日</span>}
               </li>
             )
           })}
@@ -89,6 +98,11 @@ export function RecordsSheet({
           今週 <span className="num">{weekCount}</span>回 / 目標 <span className="num">{weeklyGoal}</span>回
           {goalDone && <span className="goal__done"> 🎉 今週の目標クリア えらすぎる</span>}
         </p>
+        {!goalDone && (
+          <p className={`goal__left${left === 1 ? ' is-close' : ''}`}>
+            {left === 1 ? 'あと1回で目標クリア！' : `あと${left}回で目標クリア`}
+          </p>
+        )}
         <div
           className="goal__bar"
           role="progressbar"
@@ -101,8 +115,8 @@ export function RecordsSheet({
         </div>
       </section>
 
-      <section className="rec-section" aria-labelledby="stamp-title">
-        <h3 id="stamp-title" className="rec-section__title">
+      <section className="rec-section" aria-labelledby={stampTitle}>
+        <h3 id={stampTitle} className="rec-section__title">
           スタンプ帳 <span className="num rec-section__count">{stamps.length}</span>か所
         </h3>
         <ul className="stamps">
@@ -130,8 +144,8 @@ export function RecordsSheet({
       </section>
 
       {recent.length > 0 && (
-        <section className="rec-section" aria-labelledby="recent-title">
-          <h3 id="recent-title" className="rec-section__title">
+        <section className="rec-section" aria-labelledby={recentTitle}>
+          <h3 id={recentTitle} className="rec-section__title">
             さいきんのライド
           </h3>
           <ul className="recent">

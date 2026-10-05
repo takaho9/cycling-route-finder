@@ -48,21 +48,43 @@ describe('commonsFileFromTags (Commons only)', () => {
   })
 })
 
-describe('fetchWikidataP18', () => {
-  it('batches up to 50 ids per request', async () => {
-    const f = mockFetch((url) => {
-      const ids = new URL(url).searchParams.get('ids')!.split('|')
-      return jsonResponse({
-        entities: Object.fromEntries(ids.map((q) => [q, { claims: q === 'Q2' ? {} : { P18: [{ mainsnak: { datavalue: { value: `${q} pic.jpg` } } }] } }])),
-      })
-    })
+/** SPARQL の結果（P18 があるものだけ） */
+function sparql(qids: string[], file = (q: string) => `${q} pic.jpg`) {
+  return {
+    results: {
+      bindings: qids.map((q) => ({
+        item: { value: `http://www.wikidata.org/entity/${q}` },
+        image: { value: `http://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file(q))}` },
+      })),
+    },
+  }
+}
+const sparqlIds = (url: string) => [...decodeURIComponent(new URL(url).searchParams.get('query')!).matchAll(/wd:(Q\d+)/g)].map((m) => m[1])
+
+describe('fetchWikidataP18 (C15: SPARQL, P18 only)', () => {
+  it('batches up to 50 ids per SPARQL request and maps Special:FilePath to file titles', async () => {
+    const f = mockFetch((url) => jsonResponse(sparql(sparqlIds(url).filter((q) => q !== 'Q2'))))
     const qids = Array.from({ length: 60 }, (_, i) => `Q${i + 1}`)
     const m = await fetchWikidataP18([...qids, 'q1', 'bogus'])
     expect(f).toHaveBeenCalledTimes(2)
-    expect(new URL(String(f.mock.calls[0][0])).searchParams.get('origin')).toBe('*')
+    const u = new URL(String(f.mock.calls[0][0]))
+    expect(u.origin + u.pathname).toBe('https://query.wikidata.org/sparql')
+    expect(u.searchParams.get('format')).toBe('json')
+    expect(u.searchParams.get('query')).toContain('wdt:P18')
+    expect(sparqlIds(String(f.mock.calls[0][0]))).toHaveLength(50)
     expect(m.get('Q1')).toBe('File:Q1 pic.jpg')
     expect(m.get('Q2')).toBeNull()
     expect(m.size).toBe(60)
+  })
+
+  it('falls back to wbgetentities when SPARQL is down', async () => {
+    const f = mockFetch((url) => {
+      if (url.startsWith('https://query.wikidata.org')) return jsonResponse({}, 503)
+      return jsonResponse({ entities: { Q7: { claims: { P18: [{ mainsnak: { datavalue: { value: 'Seven.jpg' } } }] } } } })
+    })
+    const m = await fetchWikidataP18(['Q7'])
+    expect(m.get('Q7')).toBe('File:Seven.jpg')
+    expect(f).toHaveBeenCalledTimes(2)
   })
 })
 
@@ -77,9 +99,7 @@ describe('resolvePhotos', () => {
   it('OSM commons tag → wikidata P18 → nearby; batches and keeps credits', async () => {
     const f = mockFetch((url) => {
       const u = new URL(url)
-      if (u.host === 'www.wikidata.org') {
-        return jsonResponse({ entities: { Q9: { claims: { P18: [{ mainsnak: { datavalue: { value: 'Wd photo.jpg' } } }] } } } })
-      }
+      if (u.host === 'query.wikidata.org') return jsonResponse(sparql(['Q9'], () => 'Wd photo.jpg'))
       if (u.searchParams.get('generator') === 'geosearch') return jsonResponse(imageinfo(['File:Near.jpg']))
       const titles = u.searchParams.get('titles')!.split('|')
       return jsonResponse(imageinfo(titles))
