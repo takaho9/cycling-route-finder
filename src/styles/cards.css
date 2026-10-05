@@ -1,0 +1,355 @@
+/* 写真・候補カード・おすすめカード・高低差バッジ（DESIGN §3.2 / §4 / §5） */
+.place-photo {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--c-surface-2);
+  filter: var(--c-photo-filter);
+}
+.place-photo__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity var(--dur-base) var(--ease-out);
+}
+.place-photo__img.is-loaded {
+  opacity: 1;
+}
+.place-photo__credit {
+  position: absolute;
+  right: var(--sp-2);
+  bottom: var(--sp-2);
+  z-index: 1;
+  max-width: calc(100% - 16px);
+  padding: 1px 6px;
+  border-radius: var(--r-xs);
+  background: rgba(0, 0, 0, 0.55);
+  color: var(--c-white);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card .place-photo__credit,
+.rec-card .place-photo__credit {
+  top: 52px;
+  bottom: auto;
+  right: var(--sp-3);
+  max-width: 60%;
+}
+
+.photo-fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  container-type: size;
+}
+.photo-fallback__emoji {
+  position: relative;
+  font-size: 40cqh;
+  line-height: 1;
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.18));
+}
+.photo-fallback__ghost {
+  position: absolute;
+  right: -10cqh;
+  bottom: -30cqh;
+  font-size: 80cqh;
+  line-height: 1;
+  opacity: 0.12;
+  transform: rotate(-12deg);
+}
+.photo-fallback__road {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 30%;
+  fill: rgba(255, 255, 255, 0.1);
+}
+
+.card__overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--c-photo-overlay);
+  pointer-events: none;
+}
+.cat-pill {
+  position: absolute;
+  top: var(--sp-3);
+  left: var(--sp-3);
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  background: var(--c-pill-on-photo);
+  color: var(--c-pill-on-photo-text);
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.visited-pill {
+  display: inline-flex;
+  align-items: center;
+  margin-left: var(--sp-2);
+  padding: 0 8px;
+  border-radius: var(--r-pill);
+  background: var(--c-accent-strong);
+  color: var(--c-on-accent);
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  line-height: 22px;
+  vertical-align: 1px;
+}
+.demo-note {
+  margin-top: var(--sp-2);
+  color: var(--c-text-sub);
+  font-size: var(--fs-caption);
+}
+
+/* 候補カード */
+.card {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  background: var(--c-surface);
+  box-shadow: var(--sh-1);
+  animation: card-in var(--dur-slow) var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+.card__photo {
+  position: relative;
+  aspect-ratio: 16 / 10;
+}
+.card__fav {
+  position: absolute;
+  top: var(--sp-1);
+  right: var(--sp-1);
+  z-index: 2;
+  color: var(--c-white);
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
+}
+.card__fav.is-on,
+.detail__fav.is-on {
+  color: #ff5a6e;
+}
+.card__text {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: var(--sp-4);
+  color: var(--c-white);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+}
+.card__title {
+  font-size: var(--fs-h2);
+  line-height: 1.35;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.card__open {
+  text-align: left;
+  font-weight: inherit;
+  color: inherit;
+}
+/* カード全体をタップ領域に（♡ は上に重ねる） */
+.card__open::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+.card__open:focus-visible {
+  outline: none;
+}
+.card:has(.card__open:focus-visible) {
+  outline: 3px solid var(--c-accent);
+  outline-offset: 2px;
+}
+.card__meta {
+  margin-top: 2px;
+  font-size: var(--fs-sub);
+  font-weight: 500;
+}
+.card__meta .num {
+  font-weight: 600;
+}
+.card__band {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  height: 48px;
+  padding: 0 var(--sp-4);
+}
+
+/* 高低差バッジ: 色＋形＋テキスト */
+.elev-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--r-sm);
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.elev-badge .num {
+  font-size: 14px;
+}
+.elev-badge--flat {
+  background: var(--c-flat);
+  color: var(--c-on-flat);
+}
+.elev-badge--rolling {
+  background: var(--c-rolling);
+  color: var(--c-on-rolling);
+}
+.elev-badge--hilly {
+  background: var(--c-hill);
+  color: var(--c-on-hill);
+}
+.elev-badge--loading,
+.elev-badge--none {
+  background: var(--c-surface-2);
+  color: var(--c-text-sub);
+}
+.elev-badge__est {
+  margin-left: 2px;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+.mini-elev {
+  flex-shrink: 0;
+  overflow: visible;
+}
+.mini-elev--flat {
+  color: var(--c-flat);
+}
+.mini-elev--rolling {
+  color: var(--c-rolling);
+}
+.mini-elev--hilly {
+  color: var(--c-hill);
+}
+.mini-elev__area {
+  fill: currentColor;
+  opacity: 0.15;
+}
+.mini-elev__line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: draw var(--dur-slow) var(--ease-out) forwards;
+}
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* 今日のおすすめ（大カード） */
+.rec-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  background: var(--c-surface);
+  box-shadow: var(--sh-1);
+}
+.rec-card__photo {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  text-align: left;
+}
+.rec-card__rank {
+  position: absolute;
+  top: var(--sp-3);
+  right: var(--sp-3);
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--g-hero);
+  color: var(--c-on-hero);
+  font-size: 16px;
+  font-weight: 800;
+  box-shadow: var(--sh-2);
+}
+.rec-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  flex: 1;
+  padding: var(--sp-3) var(--sp-4) var(--sp-4);
+}
+.rec-card__title {
+  font-size: var(--fs-h2);
+  line-height: 1.35;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.rec-card__meta {
+  margin-top: -4px;
+  color: var(--c-text-sub);
+  font-size: var(--fs-sub);
+  font-weight: 500;
+}
+.rec-card__meta .num {
+  color: var(--c-text);
+  font-weight: 600;
+}
+.rec-card__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+.rec-card__more {
+  min-height: var(--tap);
+  padding: 0 var(--sp-2);
+  color: var(--c-accent-ink);
+  font-weight: 700;
+  font-size: var(--fs-sub);
+}
+.rec-card__go {
+  margin-top: auto;
+  width: 100%;
+}
+.rec-card .demo-note {
+  margin-top: 0;
+}

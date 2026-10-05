@@ -1,0 +1,197 @@
+/* 状態表示（DESIGN §3.6）・トースト・帰還カード */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-10) var(--sp-4);
+  text-align: center;
+}
+.empty__art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 128px;
+  height: 128px;
+  margin-bottom: var(--sp-2);
+}
+.empty__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle, transparent 38%, var(--c-surface-2) 39% 52%, transparent 53% 64%, var(--c-surface-2) 65% 70%, transparent 71%);
+}
+.empty__icon {
+  position: relative;
+  font-size: 64px;
+  line-height: 1;
+}
+.empty__title {
+  font-size: var(--fs-h2);
+  font-weight: 700;
+}
+.empty__body {
+  max-width: 320px;
+  color: var(--c-text-sub);
+  font-size: var(--fs-sub);
+}
+.empty__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--c-surface-2);
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  transform: translateX(-100%);
+  animation: shimmer 1.2s infinite;
+}
+@media (prefers-color-scheme: dark) {
+  .skeleton::after {
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.07), transparent);
+  }
+}
+@keyframes shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+.skeleton--pill {
+  display: inline-block;
+  width: 96px;
+  height: 28px;
+  border-radius: var(--r-sm);
+}
+.skeleton--graph {
+  display: inline-block;
+  width: 96px;
+  height: 28px;
+  border-radius: var(--r-xs);
+}
+.skeleton--profile {
+  height: 120px;
+  border-radius: var(--r-xs);
+}
+.card--skeleton {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after {
+    display: none;
+  }
+}
+
+.loading {
+  margin-bottom: var(--sp-4);
+}
+.loading__bar {
+  position: relative;
+  height: 4px;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: var(--c-surface-2);
+}
+.loading__bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40%;
+  border-radius: inherit;
+  background: var(--g-hero);
+  animation: loading-sweep 1.4s ease-in-out infinite alternate;
+}
+@keyframes loading-sweep {
+  from {
+    left: 0;
+  }
+  to {
+    left: 60%;
+  }
+}
+.loading__text {
+  margin-top: var(--sp-2);
+  color: var(--c-text-sub);
+  font-size: var(--fs-sub);
+  text-align: center;
+}
+
+.toast-region {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(112px + var(--safe-bottom));
+  z-index: 70;
+  display: flex;
+  justify-content: center;
+  padding: 0 var(--sp-4);
+  pointer-events: none;
+}
+.toast {
+  max-width: 480px;
+  padding: var(--sp-3) var(--sp-5);
+  border-radius: var(--r-pill);
+  background: var(--c-toast-bg);
+  color: var(--c-toast-text);
+  box-shadow: var(--sh-2);
+  font-size: var(--fs-sub);
+  font-weight: 700;
+  text-align: center;
+  animation: toast-in var(--dur-slow) var(--ease-spring);
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+}
+
+/* 「行ってきた？」カード（R7） */
+.return-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: var(--sp-3) var(--sp-3);
+  padding: var(--sp-4);
+  border-radius: var(--r-lg);
+  background: var(--c-surface);
+  box-shadow: inset 0 0 0 2px var(--c-gold), var(--sh-2);
+  animation: card-in var(--dur-slow) var(--ease-out) both;
+}
+.return-card__emoji {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--c-gold-soft);
+  font-size: 26px;
+}
+.return-card__title {
+  font-size: 18px;
+  line-height: 1.4;
+  font-weight: 700;
+}
+.return-card__sub {
+  color: var(--c-text-sub);
+  font-size: var(--fs-sub);
+}
+.return-card__actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: var(--sp-2);
+}
+.return-card__yes {
+  flex: 1 1 auto;
+  min-height: 48px;
+}
