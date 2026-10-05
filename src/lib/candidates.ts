@@ -1,7 +1,7 @@
 import { looksLikeWaterCrossing } from './elevation'
-import { attractiveness, balancedSample, dedupeNearby, filterDonut, MAX_CANDIDATES } from './places/sampling'
+import { attractiveness, balancedSample, dedupeNearby, filterDonut, isCandidateWorthy, MAX_CANDIDATES } from './places/sampling'
 import { hashString, mulberry32, shuffle } from './random'
-import { computeReach, ROUND_TRIP_MINUTES } from './reach'
+import { computeReach, MIN_REACH_RATIO, ROUND_TRIP_MINUTES } from './reach'
 import type { Category, ElevationLabel, Place } from './types'
 
 /**
@@ -12,9 +12,21 @@ export interface SelectOptions {
   dateKey?: string
 }
 
-export function selectCandidates(all: readonly Place[], roundTripMin: number, speedKmh: number, max = MAX_CANDIDATES, _opts: SelectOptions = {}): Place[] {
+/** 候補が足りないときに内径を広げる段階（最大到達距離に対する比率, v1.4 Q10） */
+export const INNER_RATIO_STEPS = [MIN_REACH_RATIO, 0.6, 0.5] as const
+
+/**
+ * 内径の比率を段階的に下げながら、質の悪いもの（飲食以外のスコア 0）を除いて max 件そろう帯を探す（v1.4 Q10）。
+ * 最後の段階でも足りなければ、その段階の結果を使う。
+ */
+export function selectCandidates(all: readonly Place[], roundTripMin: number, speedKmh: number, max = MAX_CANDIDATES, { dateKey }: SelectOptions = {}): Place[] {
   const r = computeReach(roundTripMin, speedKmh)
-  return balancedSample(dedupeNearby(filterDonut(all, r.minKm, r.bandMaxKm)), max)
+  let pool: Place[] = []
+  for (const ratio of INNER_RATIO_STEPS) {
+    pool = dedupeNearby(filterDonut(all, r.maxKm * ratio, r.bandMaxKm)).filter(isCandidateWorthy)
+    if (pool.length >= max) break
+  }
+  return balancedSample(pool, max, undefined, { dateKey })
 }
 
 /** オフライン用に保存する件数（時間チップごと, BACKLOG-2 C5） */
@@ -125,6 +137,20 @@ export function recommendationKey({
  * 今日のおすすめ（キーで日替わり、未訪問に加点、カテゴリ重複なし）。
  * 標高（水面ペナルティ等）は使わない: 標高の到着で並びが変わらないように（C7。水面ペナルティは一覧の並びのみ）。
  */
+/** おすすめの「見栄え」の目安: 写真あり、またはスコアがこれ以上（v1.4 Q7） */
+export const RECOMMEND_MIN_SCORE = 5
+
+/** 写真がある（または見つかる見込みが高い）か。static は埋め込み写真、Overpass は Commons のタグ */
+export function hasPhotoHint(p: Pick<Place, 'photoEmbed' | 'photoUrl' | 'tags'>): boolean {
+  return !!(p.photoEmbed || p.photoUrl || p.tags?.wikimedia_commons || p.tags?.image)
+}
+
+/**
+ * 今日のおすすめ（キーで日替わり、未訪問に加点、カテゴリ重複なし）。
+ * v1.4 Q7: まず「写真あり、またはスコア 5 以上」の候補から選び、足りなければ全体から補う（スコア 0 は最後）。
+ * 見栄えの加点は min(1.2, score × 0.1)。
+ * 標高（水面ペナルティ等）は使わない: 標高の到着で並びが変わらないように（C7。水面ペナルティは一覧の並びのみ）。
+ */
 export function pickRecommendations<T extends Place>(
   places: readonly T[],
   { key, visited, count = 3 }: { key: string; visited: ReadonlySet<string>; count?: number },
@@ -132,21 +158,26 @@ export function pickRecommendations<T extends Place>(
   const scored = places
     .map((p) => {
       const daily = hashString(`${key}|${p.id}`) / 2 ** 32
-      const score = daily + (visited.has(p.id) ? 0 : 0.6) + Math.min(0.5, attractiveness(p) * 0.05)
+      const score = daily + (visited.has(p.id) ? 0 : 0.6) + Math.min(1.2, Math.max(0, attractiveness(p)) * 0.1)
       return { p, score }
     })
     .sort((a, b) => b.score - a.score || (a.p.id < b.p.id ? -1 : 1))
+  const showy = (p: T) => hasPhotoHint(p) || attractiveness(p) >= RECOMMEND_MIN_SCORE
+  const tiers = [scored.filter(({ p }) => showy(p)), scored.filter(({ p }) => !showy(p) && attractiveness(p) > 0), scored.filter(({ p }) => attractiveness(p) <= 0 && !showy(p))]
   const out: T[] = []
   const usedCats = new Set<Category>()
-  for (const { p } of scored) {
-    if (out.length >= count) break
-    if (usedCats.has(p.category)) continue
-    usedCats.add(p.category)
-    out.push(p)
-  }
-  for (const { p } of scored) {
-    if (out.length >= count) break
-    if (!out.includes(p)) out.push(p)
+  for (const tier of tiers) {
+    // 段ごとに: カテゴリ重複なし → 重複あり
+    for (const { p } of tier) {
+      if (out.length >= count) break
+      if (usedCats.has(p.category)) continue
+      usedCats.add(p.category)
+      out.push(p)
+    }
+    for (const { p } of tier) {
+      if (out.length >= count) break
+      if (!out.includes(p)) out.push(p)
+    }
   }
   return out
 }

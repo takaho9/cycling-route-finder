@@ -1,4 +1,5 @@
 import { bearingSector, haversineKm } from '../geo'
+import { hashString } from '../random'
 import type { Place } from '../types'
 
 export const MAX_CANDIDATES = 40
@@ -55,15 +56,31 @@ export function attractiveness(p: Partial<Pick<Place, 'tags' | 'photoUrl' | 'sco
   return s
 }
 
+/** 飲食（カフェ・パン・甘味）はスコア 0 でも候補に残す（店はタグが少なくても行き先になる） */
+export const FOOD_CATEGORIES: ReadonlySet<string> = new Set(['cafe', 'bakery', 'sweets'])
+
+/** 候補にしてよいか（v1.4 Q8）: 飲食以外はスコア 0 を除く */
+export function isCandidateWorthy(p: Pick<Place, 'category'> & Partial<Pick<Place, 'tags' | 'photoUrl' | 'score'>>): boolean {
+  return FOOD_CATEGORIES.has(p.category) || attractiveness(p) > 0
+}
+
+export interface BalancedSampleOptions {
+  /** 同点の並びを日替わりにする日付キー（v1.4 Q8）。無ければ id 順 */
+  dateKey?: string
+}
+
 /**
  * カテゴリと方位が偏らないように最大 max 件を選ぶ。
  * カテゴリ間ラウンドロビン → 各カテゴリ内では方位セクタ間ラウンドロビン。
- * 各バケット内は見栄えスコア降順 → id 昇順で決定的。
+ * 飲食以外はスコア 0 を除いてから割り当てる（v1.4 Q8）。
+ * 各バケット内は見栄えスコア降順 → 同点は hash(id+日付)（日替わり）→ id 昇順で決定的。
  */
-export function balancedSample(places: readonly Place[], max = MAX_CANDIDATES, sectors = 8): Place[] {
-  if (places.length <= max) return [...places]
+export function balancedSample(places: readonly Place[], max = MAX_CANDIDATES, sectors = 8, { dateKey }: BalancedSampleOptions = {}): Place[] {
+  const worthy = places.filter(isCandidateWorthy)
+  if (worthy.length <= max) return [...worthy]
+  const tie = (p: Place) => (dateKey ? hashString(`${p.id}|${dateKey}`) : 0)
   const byCat = new Map<string, Map<number, Place[]>>()
-  for (const p of places) {
+  for (const p of worthy) {
     const sec = bearingSector(p.bearing, sectors)
     let m = byCat.get(p.category)
     if (!m) byCat.set(p.category, (m = new Map()))
@@ -71,7 +88,7 @@ export function balancedSample(places: readonly Place[], max = MAX_CANDIDATES, s
     arr.push(p)
     m.set(sec, arr)
   }
-  const cmp = (a: Place, b: Place) => attractiveness(b) - attractiveness(a) || cmpId(a, b)
+  const cmp = (a: Place, b: Place) => attractiveness(b) - attractiveness(a) || tie(a) - tie(b) || cmpId(a, b)
   const queues: Place[][] = [...byCat.keys()].sort().map((cat) => {
     const secMap = byCat.get(cat)!
     const buckets = [...secMap.keys()].sort((a, b) => a - b).map((k) => secMap.get(k)!.sort(cmp))

@@ -43,7 +43,8 @@ export function createDefaultProviders(): PlaceProvider[] {
 
 /** 永続キャッシュ（IndexedDB, TTL 7 日）に入れるプロバイダ。static は SW が持つので不要、mock は入れない */
 const PERSISTED_PROVIDERS: ReadonlySet<PlaceSource> = new Set<PlaceSource>(['overpass'])
-const isStaticProvider = (p: PlaceProvider): p is StaticProvider => typeof (p as Partial<StaticProvider>).isSample === 'function'
+const isStaticProvider = (p: PlaceProvider): p is StaticProvider =>
+  typeof (p as Partial<StaticProvider>).isSample === 'function' && typeof (p as Partial<StaticProvider>).lastOutsideRatio === 'function'
 
 /** デモモード（?demo=1）用: Mock のみ */
 export function createDemoProviders(): PlaceProvider[] {
@@ -126,12 +127,14 @@ export async function searchPlaces(
         const raw = await provider.search(snapped, minKm, maxKm, signal)
         const places = raw.map((p) => ({ ...p, source: provider.name }))
         const sample = isStaticProvider(provider) && provider.isSample()
+        const outside = isStaticProvider(provider) ? provider.lastOutsideRatio() : 0
         const result: SearchResult = {
           kind: isDemo ? 'demo' : places.length ? 'ok' : 'empty',
           places,
           source: provider.name,
           isDemo,
           ...(sample ? { sample } : {}),
+          ...(outside > 0 ? { partialCoverage: Math.round(outside * 100) / 100 } : {}),
           errors: [...errors],
         }
         // デモ結果はキャッシュしない（回線復帰後に実データを取りに行けるように）。static はメモリだけ（SW が持つ）
@@ -233,6 +236,10 @@ export function fallbackReason(errors: readonly { error: unknown }[], online: bo
 }
 
 /** 事前生成データがサンプル版（index.json の sample: true）のときの説明 */
+/** 検索円のこの割合以上が都外なら「都外は一部のみ」と表示（v1.4 Q10） */
+export const PARTIAL_COVERAGE_THRESHOLD = 0.3
+export const PARTIAL_COVERAGE_NOTE = '都外は一部のみ'
+
 export const SAMPLE_DATA_MESSAGE =
   'いまは東京駅まわりのサンプルデータ（実在のスポットの一部だけ）で表示中。都内全域のデータを準備中だよ'
 

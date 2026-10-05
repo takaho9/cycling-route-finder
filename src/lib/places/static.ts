@@ -1,7 +1,7 @@
 import { haversineKm } from '../geo'
 import { fetchJson, mapWithConcurrency } from '../http'
 import type { LatLng, Place, PlaceProvider } from '../types'
-import { inCoverage, recordToPlace, tileFileName, tilesForCircle, type StaticIndex, type StaticRecord, type StaticTile } from './staticData'
+import { inCoverage, outsideCoverageRatio, recordToPlace, tileFileName, tilesForCircle, type StaticIndex, type StaticRecord, type StaticTile } from './staticData'
 
 /**
  * 出発地が対象範囲（都内）の外。失敗ではなく「対象外」なので、次のプロバイダ（Overpass）へ進む合図。
@@ -70,6 +70,8 @@ export interface StaticProviderOptions {
 export interface StaticProvider extends PlaceProvider {
   /** 直近に使った index がサンプルデータか */
   isSample(): boolean
+  /** 直近の検索円のうち対象範囲（都内）の外にある割合（v1.4 Q10） */
+  lastOutsideRatio(): number
 }
 
 /**
@@ -82,6 +84,7 @@ export interface StaticProvider extends PlaceProvider {
  */
 export function createStaticProvider({ baseUrl = staticDataBaseUrl(), concurrency = STATIC_TILE_CONCURRENCY }: StaticProviderOptions = {}): StaticProvider {
   let sample = false
+  let outside = 0
   const loadTile = async (key: string, version: string, signal?: AbortSignal): Promise<StaticRecord[]> => {
     const ck = `${baseUrl}|${version}|${key}`
     const hit = tiles.get(ck)
@@ -97,10 +100,12 @@ export function createStaticProvider({ baseUrl = staticDataBaseUrl(), concurrenc
   return {
     name: 'static',
     isSample: () => sample,
+    lastOutsideRatio: () => outside,
     async search(center: LatLng, _minKm: number, maxKm: number, signal?: AbortSignal): Promise<Place[]> {
       const index = await loadStaticIndex(baseUrl, signal)
       sample = !!index.sample
       if (!inCoverage(index, center)) throw new OutOfCoverageError()
+      outside = outsideCoverageRatio(index, center, maxKm)
       const keys = tilesForCircle(center, maxKm).filter((k) => (index.tiles[k] ?? 0) > 0)
       const lists = await mapWithConcurrency(keys, concurrency, (k) => loadTile(k, index.version, signal))
       const out: Place[] = []

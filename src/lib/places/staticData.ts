@@ -159,6 +159,26 @@ export function inCoverage(index: Pick<StaticIndex, 'coverage'>, p: LatLng): boo
   return true
 }
 
+/**
+ * 検索円のうち対象範囲の外にある割合（0〜1, v1.4 Q10）。円を格子点で近似する（n×n）。
+ * 都境の近くで「都外は一部のみ」と表示するのに使う。
+ */
+export function outsideCoverageRatio(index: Pick<StaticIndex, 'coverage'>, center: LatLng, radiusKm: number, n = 24): number {
+  const dLat = radiusKm / 111.32
+  const dLng = radiusKm / (111.32 * Math.max(0.01, Math.cos((center.lat * Math.PI) / 180)))
+  let inside = 0
+  let outside = 0
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      const p = { lat: center.lat - dLat + ((i + 0.5) * 2 * dLat) / n, lng: center.lng - dLng + ((j + 0.5) * 2 * dLng) / n }
+      if (haversineKm(center, p) > radiusKm) continue
+      if (inCoverage(index, p)) inside++
+      else outside++
+    }
+  }
+  return inside + outside ? outside / (inside + outside) : 0
+}
+
 export function photoFromStatic(p: StaticPhoto): EmbeddedPhoto {
   return {
     url500: p.m,

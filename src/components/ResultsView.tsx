@@ -1,3 +1,4 @@
+import { PARTIAL_COVERAGE_NOTE } from '../lib/places'
 import { useId, type ReactNode } from 'react'
 import type { ObserveRef } from '../hooks/useEnrichment'
 import type { SearchStatus } from '../hooks/usePlaceSearch'
@@ -33,6 +34,7 @@ export function ResultsView({
   isDemo,
   demoReason,
   demoMessage,
+  partialCoverage = false,
   fallback,
   tripOf,
   goHrefOf,
@@ -60,6 +62,8 @@ export function ResultsView({
   isDemo: boolean
   demoReason?: string | null
   demoMessage?: string
+  /** 検索円の 30% 以上が都外（v1.4 Q10） */
+  partialCoverage?: boolean
   /** 実 API が失敗してデモに落ちている（?demo=1 ではない）。再試行ボタンを出し、カードから直接出発させない（C6） */
   fallback: boolean
   tripOf: (p: ViewPlace) => TripEstimate
@@ -123,6 +127,7 @@ export function ResultsView({
             <strong className="num">{total}</strong>件の行き先
           </p>
           {isDemo && <DemoPill reason={demoReason} message={demoMessage} />}
+          {partialCoverage && <span className="count-line__note">{PARTIAL_COVERAGE_NOTE}</span>}
           {fallback && (
             <button type="button" className="btn btn--text count-line__retry" onClick={onRetry}>
               実データでさがし直す

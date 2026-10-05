@@ -252,3 +252,19 @@ describe('embedded photos skip runtime lookups', () => {
     setPhotoPersistentCache(undefined)
   })
 })
+
+describe('v1.4 Q10: share of the search circle outside the coverage', () => {
+  it('is ~0 well inside, large near the edge; carried on the result as partialCoverage', async () => {
+    const { outsideCoverageRatio } = await import('./staticData')
+    expect(outsideCoverageRatio(INDEX, TOKYO_STATION, 3)).toBe(0)
+    // リングの西端（139.6）の上: 円の約半分が外
+    const edge = outsideCoverageRatio(INDEX, { lat: 35.7, lng: 139.6 }, 5)
+    expect(edge).toBeGreaterThan(0.4)
+    expect(edge).toBeLessThan(0.6)
+    serve()
+    const r = await searchPlaces({ lat: 35.7, lng: 139.601 }, { providers: [createStaticProvider({ baseUrl: BASE })], useCache: false, speedKmh: 16 })
+    expect(r.partialCoverage).toBeGreaterThanOrEqual(0.3)
+    const inner = await searchPlaces(TOKYO_STATION, { providers: [createStaticProvider({ baseUrl: BASE })], useCache: false, speedKmh: 12 })
+    expect(inner.partialCoverage ?? 0).toBeLessThan(0.3)
+  })
+})

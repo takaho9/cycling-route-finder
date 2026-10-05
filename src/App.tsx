@@ -20,7 +20,7 @@ import { usePlaceSearch } from './hooks/usePlaceSearch'
 import { useStableRecommendations } from './hooks/useRecommendations'
 import { categoriesIn, filterAndSort, recommendationKey, selectCandidates } from './lib/candidates'
 import { buildDepartUrl, buildOneWayUrl } from './lib/gmaps'
-import { FALLBACK_MESSAGES, SAMPLE_DATA_MESSAGE } from './lib/places'
+import { FALLBACK_MESSAGES, PARTIAL_COVERAGE_THRESHOLD, SAMPLE_DATA_MESSAGE } from './lib/places'
 import { formatMinutesJa, roadBudgetKm, ROUND_TRIP_MINUTES, SPEED_PRESETS } from './lib/reach'
 import { demoServices, isDemoMode, realServices, type Services } from './lib/services'
 import { loadFlag, loadSettings, saveSettings, setFlag, shouldAskReturn, type Settings } from './lib/storage'
@@ -73,16 +73,19 @@ export default function App({ services: injected, now: clock = systemNow }: { se
   const [firstRun] = useState(() => !loadFlag('welcomed'))
   useEffect(() => setFlag('welcomed'), [])
 
+  // ---- habits（候補の日替わりにも使うので先に）
+  const habits = useHabits(settings.weeklyGoal, clock, now)
+
   // ---- origin / search / enrichment
   const { origin, status: locStatus, error: locError, locate, choose } = useOrigin(services)
   const search = usePlaceSearch(services, origin, online, kmh)
   const all = search.result?.places
-  const candidates = useMemo(() => (all ? selectCandidates(all, minutes, kmh) : []), [all, minutes, kmh])
+  // 同点の並びは日替わり（v1.4 Q8）
+  const candidates = useMemo(() => (all ? selectCandidates(all, minutes, kmh, undefined, { dateKey: habits.todayKey }) : []), [all, minutes, kmh, habits.todayKey])
   const { elevations, photos, routeKm, markVisible, setRouteResult } = useEnrichment(services, origin, candidates)
   const observe = useVisibility(markVisible)
 
   // ---- habits
-  const habits = useHabits(settings.weeklyGoal, clock, now)
   const [bump, setBump] = useState(0)
   const [stampKey, setStampKey] = useState(0)
 
@@ -266,6 +269,7 @@ export default function App({ services: injected, now: clock = systemNow }: { se
   const isDemo = !!search.result?.isDemo || sampleData || services.demo
   const demoReason = search.reason ? FALLBACK_MESSAGES[search.reason] : null
   const demoMessage = sampleData ? SAMPLE_DATA_MESSAGE : undefined
+  const partialCoverage = (search.result?.partialCoverage ?? 0) >= PARTIAL_COVERAGE_THRESHOLD
   const searchDone = search.status !== 'idle' && search.status !== 'loading'
   const homeCats = useMemo(() => topCategories(candidates), [candidates])
 
@@ -313,6 +317,7 @@ export default function App({ services: injected, now: clock = systemNow }: { se
             categories={homeCats}
             count={origin && searchDone ? views.length : null}
             isDemo={isDemo}
+            partialCoverage={partialCoverage}
           />
           <div className="bottom-bar">
             <div className="bottom-bar__row">
@@ -346,6 +351,7 @@ export default function App({ services: injected, now: clock = systemNow }: { se
           isDemo={isDemo}
           demoReason={demoReason}
           demoMessage={demoMessage}
+          partialCoverage={partialCoverage}
           fallback={search.fallback}
           tripOf={tripOf}
           goHrefOf={goHrefOf}

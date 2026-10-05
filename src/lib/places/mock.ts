@@ -97,6 +97,8 @@ export function generateMockPlaces(center: LatLng, minKm: number, maxKm: number,
       distanceKm,
       bearing: bearingDeg(center, pos),
       tags: { mock: 'yes' },
+      // デモでも「見栄えスコア 0 の見どころ」は候補にならない（v1.4 Q8）ので、1〜9 の決定的なスコアを付ける
+      score: 1 + Math.floor(rng() * 9),
       source: 'mock',
       elevation: summarizeElevation(profile, distanceKm),
     })

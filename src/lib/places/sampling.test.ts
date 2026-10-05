@@ -35,17 +35,30 @@ describe('sampling', () => {
   })
 
   it('returns all when under the limit', () => {
-    expect(balancedSample([mk('a', 'park', 0), mk('b', 'cafe', 90)], 40)).toHaveLength(2)
+    expect(balancedSample([mk('a', 'park', 0, { score: 1 }), mk('b', 'cafe', 90)], 40)).toHaveLength(2)
   })
 
   it('balances categories when one category dominates', () => {
     const cafes = Array.from({ length: 100 }, (_, i) => mk(`cafe${String(i).padStart(3, '0')}`, 'cafe', (i * 37) % 360))
-    const parks = Array.from({ length: 5 }, (_, i) => mk(`park${i}`, 'park', i * 70))
-    const shrines = Array.from({ length: 5 }, (_, i) => mk(`shrine${i}`, 'shrine', i * 70))
+    const parks = Array.from({ length: 5 }, (_, i) => mk(`park${i}`, 'park', i * 70, { score: 2 }))
+    const shrines = Array.from({ length: 5 }, (_, i) => mk(`shrine${i}`, 'shrine', i * 70, { score: 2 }))
     const out = balancedSample([...cafes, ...parks, ...shrines], 40)
     expect(out).toHaveLength(40)
     expect(out.filter((p) => p.category === 'park')).toHaveLength(5)
     expect(out.filter((p) => p.category === 'cafe')).toHaveLength(30)
+  })
+
+  it('v1.4 Q8: non-food places with score 0 are dropped before the split; cafes/bakeries/sweets are kept', () => {
+    const out = balancedSample([mk('p0', 'park', 0), mk('p1', 'park', 10, { score: 3 }), mk('c0', 'cafe', 20), mk('h0', 'historic', 30, { tags: { wikidata: 'Q1' } })], 40)
+    expect(out.map((p) => p.id).sort()).toEqual(['c0', 'h0', 'p1'])
+  })
+
+  it('v1.4 Q8: ties are broken by hash(id + date) — the order changes by day, deterministically', () => {
+    const parks = Array.from({ length: 30 }, (_, i) => mk(`park${String(i).padStart(2, '0')}`, 'park', 0, { score: 1 }))
+    const day = (k: string) => balancedSample(parks, 5, 8, { dateKey: k }).map((p) => p.id)
+    expect(day('2026-10-05')).toEqual(day('2026-10-05'))
+    expect(day('2026-10-05')).not.toEqual(day('2026-10-06'))
+    expect(balancedSample(parks, 5).map((p) => p.id)).toEqual(['park00', 'park01', 'park02', 'park03', 'park04'])
   })
 
   it('spreads bearings within a category', () => {

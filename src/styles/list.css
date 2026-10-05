@@ -316,3 +316,9 @@
 .card-grid--list {
   padding-bottom: 88px;
 }
+
+/* 都境の近く（v1.4 Q10） */
+.count-line__note {
+  font-size: var(--fs-caption);
+  color: var(--c-text-sub);
+}

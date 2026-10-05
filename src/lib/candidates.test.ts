@@ -24,10 +24,21 @@ const P = (over: Partial<Place> & { category?: Category } = {}): Place => ({
 })
 
 describe('selectCandidates (R6: client-side only)', () => {
-  it('keeps only the 0.7–1.0 donut of the chosen time × speed', () => {
+  it('keeps only the 0.7–1.0 donut of the chosen time × speed when it has enough good places', () => {
     const r = computeReach(45, 16)
-    const all = [0.5, r.minKm - 0.01, r.minKm + 0.01, r.bandMaxKm - 0.01, r.bandMaxKm + 0.01].map((d) => P({ distanceKm: d }))
-    expect(selectCandidates(all, 45, 16).map((p) => p.distanceKm)).toEqual([r.minKm + 0.01, r.bandMaxKm - 0.01])
+    const ring = Array.from({ length: 40 }, (_, i) => P({ distanceKm: r.minKm + 0.01 + i * 0.01, score: 2, bearing: i * 9 }))
+    const all = [0.5, r.minKm - 0.01, r.bandMaxKm + 0.01].map((d) => P({ distanceKm: d, score: 2 }))
+    const out = selectCandidates([...all, ...ring], 45, 16)
+    expect(out).toHaveLength(40)
+    expect(out.every((p) => p.distanceKm >= r.minKm && p.distanceKm <= r.bandMaxKm)).toBe(true)
+  })
+
+  it('v1.4 Q10: widens the inner radius 0.7 → 0.6 → 0.5 when fewer than 40 good places remain', () => {
+    const r = computeReach(45, 16)
+    const at = (ratio: number) => P({ distanceKm: r.maxKm * ratio, score: 2 })
+    const out = selectCandidates([at(0.45), at(0.55), at(0.65), at(0.8), P({ distanceKm: r.maxKm * 0.8 })], 45, 16)
+    // 0.5 まで広げる（0.45 は入らない）。スコア 0 の見どころは除く
+    expect(out.map((p) => +(p.distanceKm / r.maxKm).toFixed(2)).sort()).toEqual([0.55, 0.65, 0.8])
   })
 })
 
@@ -137,5 +148,36 @@ describe('placesForOffline (C5: store only the displayed top)', () => {
     expect(saved[0].tags).toEqual({ name: 'x', wikidata: expect.stringMatching(/^Q/) })
     // 保存した中からでも、各時間チップの表示は作れる
     expect(selectCandidates(saved, 45, 16).length).toBeGreaterThan(0)
+  })
+})
+
+describe('pickRecommendations v1.4 Q7', () => {
+  const key = 'k'
+  const visited = new Set<string>()
+  it('prefers places with a photo or score >= 5; score-0 places only when nothing else is left', () => {
+    const photo = { url500: 'a', url960: 'b' }
+    const list = [
+      P({ id: 'zero-cafe', category: 'cafe' }),
+      P({ id: 'low-park', category: 'park', score: 2 }),
+      P({ id: 'photo-shrine', category: 'shrine', score: 1, photoEmbed: photo }),
+      P({ id: 'high-museum', category: 'museum', score: 7 }),
+      P({ id: 'photo-park', category: 'park', score: 3, photoEmbed: photo }),
+    ]
+    for (const k of ['a', 'b', 'c', 'd', 'e']) {
+      const ids = pickRecommendations(list, { key: k, visited }).map((p) => p.id)
+      expect(ids.sort()).toEqual(['high-museum', 'photo-park', 'photo-shrine'])
+    }
+    // 見栄えの候補が 1 件しか無ければ、スコア > 0 → スコア 0 の順で補う
+    const few = [P({ id: 'z', category: 'cafe' }), P({ id: 'l', category: 'park', score: 1 }), P({ id: 'h', category: 'museum', score: 9 })]
+    expect(pickRecommendations(few, { key, visited }).map((p) => p.id)).toEqual(['h', 'l', 'z'])
+  })
+
+  it('the appeal bonus is capped at 1.2 (score × 0.1) so the daily rotation still matters', () => {
+    const list = Array.from({ length: 12 }, (_, i) => P({ id: `m${i}`, category: 'museum', score: i < 6 ? 30 : 12, photoEmbed: { url500: 'a', url960: 'b' } }))
+    const days = new Set(['d1', 'd2', 'd3', 'd4', 'd5', 'd6'].map((k) => pickRecommendations(list, { key: k, visited })[0].id))
+    expect(days.size).toBeGreaterThan(1)
+    // スコア 12 と 30 は同じ加点（上限 1.2）なので、どちらも 1 番手になりうる
+    const firsts = ['d1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8', 'd9', 'd10'].map((k) => pickRecommendations(list, { key: k, visited })[0].id)
+    expect(firsts.some((id) => Number(id.slice(1)) >= 6)).toBe(true)
   })
 })

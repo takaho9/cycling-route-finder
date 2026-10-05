@@ -1,3 +1,4 @@
+import { PARTIAL_COVERAGE_NOTE } from '../lib/places'
 import type { ReactNode } from 'react'
 import type { LocateError, LocateStatus } from '../hooks/useOrigin'
 import { formatMinutesJa, ROUND_TRIP_MINUTES, SPEED_PRESETS, type SpeedPresetId } from '../lib/reach'
@@ -29,6 +30,7 @@ export function HomeView({
   categories,
   count,
   isDemo,
+  partialCoverage = false,
 }: {
   /** 「行ってきた？」帯など最上部に出すもの */
   top?: ReactNode
@@ -53,6 +55,8 @@ export function HomeView({
   /** いまの時間で行ける候補の数（未取得なら null） */
   count: number | null
   isDemo: boolean
+  /** 検索円の 30% 以上が都外（事前生成データの対象外, v1.4 Q10） */
+  partialCoverage?: boolean
 }) {
   const needsOrigin = !origin && locStatus === 'denied'
   const minutes = ROUND_TRIP_MINUTES[index]
@@ -82,6 +86,7 @@ export function HomeView({
           {count !== null && count > 0 && (
             <p className="home__count">
               この範囲に<span className="num">{count}</span>か所{isDemo && <span className="home__count-demo">（デモ）</span>}
+              {partialCoverage && <span className="home__count-demo">（{PARTIAL_COVERAGE_NOTE}）</span>}
             </p>
           )}
         </div>
