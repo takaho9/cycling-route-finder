@@ -60,10 +60,10 @@ export default function App({ services: injected, now = systemNow }: { services?
 
   // ---- origin / search / enrichment
   const { origin, status: locStatus, locate, choose } = useOrigin(services)
-  const search = usePlaceSearch(services, origin, online)
+  const search = usePlaceSearch(services, origin, online, kmh)
   const all = search.result?.places
   const candidates = useMemo(() => (all ? selectCandidates(all, minutes, kmh) : []), [all, minutes, kmh])
-  const { elevations, photos, markVisible, setElevation } = useEnrichment(services, origin, candidates)
+  const { elevations, photos, markVisible, setRouteResult } = useEnrichment(services, origin, candidates)
   const observe = useVisibility(markVisible)
 
   // ---- habits
@@ -96,7 +96,7 @@ export default function App({ services: injected, now = systemNow }: { services?
     [views, filter, habits.visited, seed],
   )
   const recs = useMemo(
-    () => pickRecommendations(views, { dateKey: habits.todayKey, visited: habits.visited }),
+    () => pickRecommendations(views, { key: habits.todayKey, visited: habits.visited }),
     [views, habits.todayKey, habits.visited],
   )
   const available = useMemo(() => categoriesIn(views), [views])
@@ -299,7 +299,7 @@ export default function App({ services: injected, now = systemNow }: { services?
           onRode={onRode}
           onGo={(p) => onGo(p)}
           onToggleFavorite={(p) => habits.toggleFav(p)}
-          onRouteElevation={setElevation}
+          onRouteElevation={(id, e) => e && !e.estimated && setRouteResult(id, { km: 0, elevation: e })}
           onClose={() => setDetail(null)}
         />
       )}

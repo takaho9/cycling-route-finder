@@ -58,8 +58,8 @@ describe('DetailSheet', () => {
     const a = screen.getByRole('link', { name: /Googleマップで出発/ }) as HTMLAnchorElement
     expect(a.target).toBe('_blank')
     expect(a.rel).toBe('noopener')
-    // 詳細を開いたときだけ経路＋標高を取り、一覧のカードにも反映する（R3/A8）
-    await waitFor(() => expect(p.onRouteElevation).toHaveBeenCalledWith(place.id, expect.objectContaining({ estimated: false })))
+    // デモの経路は直線なので確定値にはならない（C3）
+    await waitFor(() => expect(p.onRouteElevation).toHaveBeenCalledWith(place.id, expect.objectContaining({ estimated: true })))
   })
 
   it('one way: no origin, dir_action=navigate; walking link as an alternative', () => {

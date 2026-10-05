@@ -91,14 +91,14 @@ export function isRouteOverBudget(routeKm: number, roundTripMin: number, speedKm
 }
 
 /**
- * Overpass に 1 回だけ投げる検索範囲（R6）。どの速度プリセット・時間チップでも
- * クライアント側フィルタで済むよう、最遅×最短の内径 〜 最速×最長の外径 をカバーする。
+ * Overpass に 1 回だけ投げる検索範囲（R6, BACKLOG-2 C1）。
+ * 現在の速度プリセットでの最長時間（90 分）の外径 〜 最短時間（15 分）の内径。
+ * 時間チップの切替はクライアント側フィルタのみ。速度を変えたら再取得する。
  */
-export function searchBand(): { minKm: number; maxKm: number } {
-  const speeds = Object.values(SPEED_PRESETS).map((p) => p.kmh)
+export function searchBand(speedKmh: number): { minKm: number; maxKm: number } {
   const minT = Math.min(...ROUND_TRIP_MINUTES)
   const maxT = Math.max(...ROUND_TRIP_MINUTES)
-  return { minKm: computeReach(minT, Math.min(...speeds)).minKm, maxKm: computeReach(maxT, Math.max(...speeds)).maxKm }
+  return { minKm: computeReach(minT, speedKmh).minKm, maxKm: computeReach(maxT, speedKmh).maxKm }
 }
 
 /** 「1時間15分」のような日本語表記 */

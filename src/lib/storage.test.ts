@@ -32,7 +32,10 @@ import {
   toggleFavorite,
   visitedPlaceIds,
   writeJson,
+  loadLastResultNear,
+  saveLastResult,
 } from './storage'
+import type { Place } from './types'
 
 const d = (s: string) => {
   const [y, m, day] = s.split('-').map(Number)
@@ -207,5 +210,20 @@ describe('departure → "行ってきた？"', () => {
     expect(loadDeparture()).toEqual(dep)
     clearDeparture()
     expect(loadDeparture()).toBeNull()
+  })
+})
+
+describe('last result for offline (C5)', () => {
+  const place = (id: string): Place => ({ id, name: id, lat: 35.7, lng: 139.8, category: 'park', distanceKm: 3, bearing: 0, source: 'overpass' })
+  const at = { lat: 35.6812, lng: 139.7671 }
+  it('is used only when the origin is within 1km of where it was saved', () => {
+    saveLastResult({ origin: at, places: [place('a')], source: 'overpass', savedAt: '2026-10-07T00:00:00Z' })
+    expect(loadLastResultNear({ lat: at.lat + 0.008, lng: at.lng })?.places).toHaveLength(1) // ~0.9km
+    expect(loadLastResultNear({ lat: at.lat + 0.01, lng: at.lng })).toBeNull() // ~1.1km
+    expect(loadLastResultNear({ lat: 34.70, lng: 135.49 })).toBeNull() // 大阪
+  })
+  it('broken data is ignored', () => {
+    localStorage.setItem(STORAGE_KEYS.lastResult, JSON.stringify({ places: [] }))
+    expect(loadLastResultNear(at)).toBeNull()
   })
 })

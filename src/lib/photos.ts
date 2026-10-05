@@ -1,5 +1,5 @@
 import { fetchJson, isAbortError, mapWithConcurrency, type RequestOptions } from './http'
-import type { Place } from './types'
+import type { Category, Place } from './types'
 
 /** サムネ幅（BACKLOG A4）: 一覧 / 詳細 */
 export const PHOTO_WIDTH_LIST = 500
@@ -21,6 +21,28 @@ export interface PhotoInfo {
   license?: string
   /** Commons のファイルページ */
   pageUrl?: string
+  /** true = 施設そのものの写真ではなく、近くで撮られた写真（「付近の写真」と表示, C11） */
+  nearby?: boolean
+}
+
+/** 近傍写真をさがすカテゴリ（屋外で、付近の写真でも雰囲気が伝わるもの, BACKLOG-2 C11） */
+export const NEARBY_PHOTO_CATEGORIES: ReadonlySet<Category> = new Set<Category>(['park', 'viewpoint', 'shrine', 'historic'])
+
+/** 施設名から取り除く一般名詞（ファイル名との照合に使わない） */
+const GENERIC_NAME_RE =
+  /(公園|緑地|広場|庭園|神社|神宮|八幡宮|稲荷|天満宮|寺院|寺|院|堂|宮|社|展望台|展望広場|見晴らし台|城跡|城址|跡|遺跡|古墳|旧|の|park|garden|shrine|temple)/gi
+
+/** 施設名の固有部分の 2 文字窓（ファイル名に含まれていれば、その施設の写真の可能性が高い） */
+export function nameFragments(name: string): string[] {
+  const core = name.normalize('NFKC').replace(/\s+/g, '').replace(GENERIC_NAME_RE, '').toLowerCase()
+  if (core.length < 2) return []
+  return [...new Set(Array.from({ length: core.length - 1 }, (_, i) => core.slice(i, i + 2)))]
+}
+
+/** ファイル名に施設名の一部（2 文字以上）が含まれるか */
+export function titleMatchesName(title: string, name: string): boolean {
+  const t = title.normalize('NFKC').replace(/[\s_]+/g, '').toLowerCase()
+  return nameFragments(name).some((f) => t.includes(f))
 }
 
 const stripHtml = (s: string | undefined) =>
@@ -141,15 +163,18 @@ export async function fetchCommonsImageInfo(
   return out
 }
 
-/** Commons の近傍画像検索（半径 100m, BACKLOG A4）。最初の写真らしい画像を返す */
+/**
+ * Commons の近傍画像検索（半径 100m, BACKLOG A4/C11）。
+ * ファイル名に施設名の一部（2 文字以上）が含まれる写真を優先し、無ければ一番近い写真。結果には nearby=true を付ける。
+ */
 export async function fetchCommonsNearby(
-  p: { lat: number; lng: number },
+  p: { lat: number; lng: number; name?: string },
   width: number,
   opts: RequestOptions = {},
 ): Promise<PhotoInfo | null> {
   const url =
     `${COMMONS_API}?action=query&generator=geosearch&ggscoord=${p.lat.toFixed(5)}%7C${p.lng.toFixed(5)}` +
-    `&ggsradius=${NEARBY_RADIUS_M}&ggsnamespace=6&ggslimit=5&${IMAGEINFO_PARAMS}&iiurlwidth=${width}`
+    `&ggsradius=${NEARBY_RADIUS_M}&ggsnamespace=6&ggslimit=10&${IMAGEINFO_PARAMS}&iiurlwidth=${width}`
   try {
     const json = await fetchJson<ImageInfoResponse & { query?: { pages?: Record<string, ImageInfoPage & { index?: number }> } }>(
       url,
@@ -159,11 +184,10 @@ export async function fetchCommonsNearby(
     const pages = Object.values(json.query?.pages ?? {}).sort(
       (a, b) => ((a as { index?: number }).index ?? 0) - ((b as { index?: number }).index ?? 0),
     )
-    for (const page of pages) {
-      const info = toPhotoInfo(page)
-      if (info) return info
-    }
-    return null
+    const usable = pages.map((page) => ({ page, info: toPhotoInfo(page) })).filter((x) => x.info)
+    const named = p.name ? usable.find((x) => titleMatchesName(x.page.title ?? '', p.name!)) : undefined
+    const chosen = named ?? usable[0]
+    return chosen?.info ? { ...chosen.info, nearby: true } : null
   } catch (e) {
     if (opts.signal?.aborted) throw e
     return null
@@ -177,17 +201,17 @@ export function clearPhotoCache(): void {
 
 export interface ResolvePhotosOptions extends RequestOptions {
   width?: number
-  /** Commons 近傍検索を使うか（既定 true） */
+  /** Commons 近傍検索を使うか（既定 true。公園・展望・寺社・史跡のみ, C11） */
   nearby?: boolean
 }
 
 /**
  * 複数の Place の写真をまとめて解決（BACKLOG A4/Y5）。
- * 明示 photoUrl → OSM wikimedia_commons/image(Commons のみ) → wikidata P18 → Commons 近傍 → null（UI でカテゴリ別フォールバック）
+ * 明示 photoUrl → OSM wikimedia_commons/image(Commons のみ) → wikidata P18 → Commons 近傍（公園・展望・寺社・史跡のみ）→ null（UI でカテゴリ別フォールバック）
  * Wikidata / Commons はそれぞれ 50 件単位でバッチ、近傍検索は並列 4。
  */
 export async function resolvePhotos(
-  places: readonly Pick<Place, 'id' | 'lat' | 'lng' | 'tags' | 'photoUrl'>[],
+  places: readonly (Pick<Place, 'id' | 'lat' | 'lng' | 'tags' | 'photoUrl'> & Partial<Pick<Place, 'name' | 'category'>>)[],
   { width = PHOTO_WIDTH_LIST, nearby = true, ...opts }: ResolvePhotosOptions = {},
 ): Promise<Map<string, PhotoInfo | null>> {
   const out = new Map<string, PhotoInfo | null>()
@@ -227,7 +251,7 @@ export async function resolvePhotos(
     const info = t ? (infos.get(t) ?? null) : null
     if (info) out.set(p.id, info)
   }
-  const rest = todo.filter((p) => !out.get(p.id))
+  const rest = todo.filter((p) => !out.get(p.id) && p.category && NEARBY_PHOTO_CATEGORIES.has(p.category))
   if (nearby && rest.length) {
     await mapWithConcurrency(rest, NEARBY_CONCURRENCY, async (p) => {
       out.set(p.id, await fetchCommonsNearby(p, width, opts))

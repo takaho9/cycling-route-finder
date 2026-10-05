@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildOneWayUrl, buildRoundTripUrl } from './gmaps'
+import { buildDepartUrl, buildOneWayUrl, buildRoundTripUrl } from './gmaps'
 
 const O = { lat: 35.68123456, lng: 139.76712345 }
 const D = { lat: 35.6585812, lng: 139.7454329 }
@@ -25,5 +25,31 @@ describe('Google Maps URLs', () => {
   })
   it('encodes negative coordinates safely', () => {
     expect(buildRoundTripUrl({ start: { lat: -33.5, lng: -70.25 }, destination: D })).toContain('destination=-33.5000%2C-70.2500')
+  })
+
+  describe('buildDepartUrl (C10: manual origin is explicit)', () => {
+    const q = (url: string) => new URL(url).searchParams
+    it('manual + one way: origin= is the chosen start, no dir_action', () => {
+      const u = q(buildDepartUrl({ mode: 'oneway', start: { ...O, kind: 'manual' }, destination: D }))
+      expect(u.get('origin')).toBe('35.6812,139.7671')
+      expect(u.get('destination')).toBe('35.658581,139.745433')
+      expect(u.has('dir_action')).toBe(false)
+    })
+    it('manual + round trip: origin= and destination= are the chosen start, waypoints = place', () => {
+      const u = q(buildDepartUrl({ mode: 'round', start: { ...O, kind: 'manual' }, destination: D }))
+      expect(u.get('origin')).toBe('35.6812,139.7671')
+      expect(u.get('destination')).toBe('35.6812,139.7671')
+      expect(u.get('waypoints')).toBe('35.658581,139.745433')
+    })
+    it('gps: origin omitted (Google Maps uses the current location)', () => {
+      expect(q(buildDepartUrl({ mode: 'oneway', start: { ...O, kind: 'gps' }, destination: D })).has('origin')).toBe(false)
+      expect(q(buildDepartUrl({ mode: 'round', start: { ...O, kind: 'gps' }, destination: D })).has('origin')).toBe(false)
+    })
+    it('demo start: always one way without origin (A6)', () => {
+      const u = q(buildDepartUrl({ mode: 'round', start: { ...O, kind: 'demo' }, destination: D }))
+      expect(u.has('origin')).toBe(false)
+      expect(u.has('waypoints')).toBe(false)
+      expect(u.get('dir_action')).toBe('navigate')
+    })
   })
 })

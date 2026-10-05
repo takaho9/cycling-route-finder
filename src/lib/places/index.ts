@@ -1,6 +1,6 @@
 import { bearingDeg, haversineKm } from '../geo'
-import { HttpError, TimeoutError } from '../http'
-import { searchBand } from '../reach'
+import { abortError, HttpError, TimeoutError } from '../http'
+import { DEFAULT_SPEED_PRESET, searchBand, SPEED_PRESETS } from '../reach'
 import type { LatLng, Place, PlaceProvider, PlaceSource } from '../types'
 import { cacheKey, createDefaultPlacesCache, GRID_MARGIN_KM, snapToGrid, type PlacesCache } from './cache'
 import { createMockProvider } from './mock'
@@ -37,7 +37,18 @@ export function createDemoProviders(): PlaceProvider[] {
 }
 
 const memoryCache = new Map<string, SearchResult>()
-const inflight = new Map<string, Promise<SearchResult>>()
+
+/**
+ * 同じキーの同時検索の共有（BACKLOG-2 C2）。
+ * 共有 run は専用の AbortController を持ち、購読者（待っている呼び出し）が全員抜けたときだけ abort する。
+ * 1 人目が abort しても、後から合流した呼び出しは結果を受け取れる。
+ */
+interface SharedRun {
+  promise: Promise<SearchResult>
+  controller: AbortController
+  subscribers: number
+}
+const inflight = new Map<string, SharedRun>()
 export function clearPlacesCache(): void {
   memoryCache.clear()
   inflight.clear()
@@ -45,6 +56,8 @@ export function clearPlacesCache(): void {
 
 export interface SearchPlacesOptions {
   signal?: AbortSignal
+  /** 現在の速度プリセット (km/h)。検索半径 = この速度 × 90 分（C1）。キャッシュキーにも含める */
+  speedKmh?: number
   providers?: PlaceProvider[]
   /** メモリ + 永続キャッシュ(TTL 7日)を使う */
   useCache?: boolean
@@ -60,26 +73,27 @@ function relocate(places: Place[], center: LatLng): Place[] {
 let defaultCache: PlacesCache | null = null
 
 /**
- * 出発地まわりの候補を「1 回だけ」取得する（R6: 時間チップ・速度の切替はクライアント側フィルタのみ）。
- * - 中心を約 1km グリッドにスナップし、全プリセット×全時間をカバーする半径で 1 リクエスト。
- * - 同じキーの同時呼び出しは in-flight Promise を共有。結果は TTL 7 日でキャッシュ。
+ * 出発地まわりの候補を「1 回だけ」取得する（R6: 時間チップの切替はクライアント側フィルタのみ）。
+ * - 中心を約 1km グリッドにスナップし、現在の速度 × 90 分の半径で 1 リクエスト（C1。速度を変えたら再取得）。
+ * - 同じキーの同時呼び出しは in-flight を共有（購読者カウント付き, C2）。結果は TTL 7 日でキャッシュ。
  * - プロバイダを順に試し、最初に「成功」したものを採用（0 件でも成功 = kind 'empty'）。
  *   失敗（ネットワーク/HTTP/タイムアウト/remark エラー）のときだけ次へ。mock 採用時は kind 'demo'（キャッシュしない）。
  * - 全プロバイダ失敗なら AggregateError。呼び出し元の abort は AbortError。
  */
 export async function searchPlaces(
   center: LatLng,
-  { signal, providers, useCache = true, cache, now = Date.now() }: SearchPlacesOptions = {},
+  { signal, speedKmh = SPEED_PRESETS[DEFAULT_SPEED_PRESET].kmh, providers, useCache = true, cache, now = Date.now() }: SearchPlacesOptions = {},
 ): Promise<SearchResult> {
+  if (signal?.aborted) throw abortError()
   const list = providers ?? createDefaultProviders()
-  const band = searchBand()
+  const band = searchBand(speedKmh)
   const maxKm = band.maxKm + GRID_MARGIN_KM
   const minKm = Math.max(0, band.minKm - GRID_MARGIN_KM)
   const snapped = snapToGrid(center)
-  const key = cacheKey(snapped, maxKm, list.map((p) => p.name).join('>'))
+  const key = `${cacheKey(snapped, maxKm, list.map((p) => p.name).join('>'))}|${speedKmh}kmh`
   const store = useCache ? (cache ?? (defaultCache ??= createDefaultPlacesCache())) : null
 
-  const run = async (): Promise<SearchResult> => {
+  const run = async (signal: AbortSignal): Promise<SearchResult> => {
     if (store) {
       const hit = memoryCache.get(key) ?? (await store.get(key, now))
       if (hit) {
@@ -114,38 +128,76 @@ export async function searchPlaces(
     throw new AggregateError(errors.map((e) => e.error), 'All place providers failed')
   }
 
-  // in-flight 共有（abort は呼び出し側ごとに扱えないため、signal 付きの呼び出しは共有しても結果待ちのみ中断）
-  let p = inflight.get(key)
-  if (!p) {
-    p = run().finally(() => inflight.delete(key))
-    inflight.set(key, p)
+  // in-flight 共有（C2）: 共有 run は呼び出し元の signal ではなく専用の controller で動かす
+  let shared = inflight.get(key)
+  if (!shared) {
+    const controller = new AbortController()
+    const run$ = run(controller.signal)
+    const entry: SharedRun = {
+      controller,
+      subscribers: 0,
+      promise: run$.finally(() => {
+        if (inflight.get(key) === entry) inflight.delete(key)
+      }),
+    }
+    entry.promise.catch(() => {}) // 購読者が全員抜けた後の reject を未処理にしない
+    shared = entry
+    inflight.set(key, entry)
   }
-  const result = await (signal ? raceAbort(p, signal) : p)
+  const result = await subscribe(key, shared, signal)
   return { ...result, places: relocate(result.places, center) }
 }
 
-function raceAbort<T>(p: Promise<T>, signal: AbortSignal): Promise<T> {
-  if (signal.aborted) return Promise.reject(Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }))
-  return new Promise<T>((resolve, reject) => {
-    const onAbort = () => reject(Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }))
-    signal.addEventListener('abort', onAbort, { once: true })
-    p.then(
+/** 共有 run を購読する。自分の signal が abort されたら自分だけ抜け、最後の 1 人なら run を abort する */
+function subscribe(key: string, shared: SharedRun, signal?: AbortSignal): Promise<SearchResult> {
+  if (signal?.aborted) return Promise.reject(abortError())
+  shared.subscribers++
+  return new Promise<SearchResult>((resolve, reject) => {
+    let done = false
+    const leave = () => {
+      if (done) return
+      done = true
+      signal?.removeEventListener('abort', onAbort)
+      shared.subscribers--
+    }
+    const onAbort = () => {
+      leave()
+      if (shared.subscribers <= 0) {
+        if (inflight.get(key) === shared) inflight.delete(key)
+        shared.controller.abort()
+      }
+      reject(abortError())
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+    shared.promise.then(
       (v) => {
-        signal.removeEventListener('abort', onAbort)
+        if (done) return
+        leave()
         resolve(v)
       },
       (e) => {
-        signal.removeEventListener('abort', onAbort)
+        if (done) return
+        leave()
         reject(e)
       },
     )
   })
 }
 
+/** テスト用: 進行中の共有検索の数 */
+export function inflightCount(): number {
+  return inflight.size
+}
+
 export type FallbackReason = 'busy' | 'network' | 'unknown'
 
-/** 実データが取れなかった理由（UI のやさしい文言用） */
-export function fallbackReason(errors: readonly { error: unknown }[]): FallbackReason | null {
+const isOnline = () => typeof navigator === 'undefined' || navigator.onLine !== false
+
+/**
+ * 実データが取れなかった理由（UI のやさしい文言用）。
+ * オンラインなのに TypeError（CORS ヘッダの無い 429/504 など）は「混雑」扱い（BACKLOG-2 C12）。
+ */
+export function fallbackReason(errors: readonly { error: unknown }[], online: boolean = isOnline()): FallbackReason | null {
   if (errors.length === 0) return null
   const flat = errors.flatMap(({ error }) => (error instanceof AggregateError ? error.errors : [error]))
   if (
@@ -155,7 +207,7 @@ export function fallbackReason(errors: readonly { error: unknown }[]): FallbackR
   ) {
     return 'busy'
   }
-  if (flat.some((e) => e instanceof TypeError)) return 'network'
+  if (flat.some((e) => e instanceof TypeError)) return online ? 'busy' : 'network'
   return 'unknown'
 }
 

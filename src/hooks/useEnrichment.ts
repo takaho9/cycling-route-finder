@@ -8,6 +8,8 @@ import type { ElevationSummary, LatLng, Place } from '../lib/types'
 const ELEVATION_CHUNK = 10
 /** 写真解決 1 回あたりの候補数 */
 const PHOTO_CHUNK = 12
+/** 候補が変わってから取りに行くまでの待ち（時間ダイヤルを連続で回したときに無駄撃ちしない, BACKLOG-2 C21） */
+export const ENRICH_DEBOUNCE_MS = 300
 
 /**
  * 段階ロード: 候補リストはすぐ表示し、写真と標高は「表示中のカード」から順に非同期で埋める。
@@ -17,6 +19,8 @@ const PHOTO_CHUNK = 12
 export function useEnrichment(services: Services, origin: LatLng | null, places: readonly Place[]) {
   const [elevations, setElevations] = useState<ReadonlyMap<string, ElevationSummary | null>>(new Map())
   const [photos, setPhotos] = useState<ReadonlyMap<string, PhotoInfo | null>>(new Map())
+  /** 詳細で取れた経路距離（片道 km, OSRM のときだけ）。一覧の距離・時間にも使う（D2） */
+  const [routeKm, setRouteKm] = useState<ReadonlyMap<string, number>>(new Map())
   const visible = useRef(new Set<string>())
   const order = useRef<Place[]>([])
   const doneElev = useRef(new Set<string>())
@@ -35,6 +39,7 @@ export function useEnrichment(services: Services, origin: LatLng | null, places:
     busy.current = { elev: false, photo: false }
     setElevations(new Map())
     setPhotos(new Map())
+    setRouteKm(new Map())
     return () => acRef.current?.abort()
   }, [originKey])
 
@@ -100,7 +105,7 @@ export function useEnrichment(services: Services, origin: LatLng | null, places:
 
   useEffect(() => {
     order.current = [...places]
-    const t = setTimeout(() => pumpRef.current(), 0)
+    const t = setTimeout(() => pumpRef.current(), ENRICH_DEBOUNCE_MS)
     return () => clearTimeout(t)
   }, [places, pump])
 
@@ -110,17 +115,26 @@ export function useEnrichment(services: Services, origin: LatLng | null, places:
     if (isVisible) pumpRef.current()
   }, [])
 
-  /** 詳細で経路ベースに確定した標高でカードも更新（A8） */
-  const setElevation = useCallback((id: string, s: ElevationSummary | null) => {
-    if (!s) return
-    setElevations((prev) => new Map(prev).set(id, s))
+  /**
+   * 詳細で経路（OSRM）が取れたら、経路距離と経路沿いの標高でカードも更新（A8, BACKLOG-2 C3/D2）。
+   * 直線フォールバックの結果はここに渡さないこと（一覧の推定値を上書きしない）。
+   */
+  const setRouteResult = useCallback((id: string, r: { km: number; elevation: ElevationSummary | null }) => {
+    setRouteKm((prev) => new Map(prev).set(id, r.km))
+    const s = r.elevation
+    if (s && !s.estimated) setElevations((prev) => new Map(prev).set(id, s))
   }, [])
 
-  return { elevations, photos, markVisible, setElevation }
+  return { elevations, photos, routeKm, markVisible, setRouteResult }
 }
 
-/** IntersectionObserver で要素の表示状態を通知（未対応環境では何もしない） */
-export function useVisibility(onChange: (id: string, visible: boolean) => void) {
+export type ObserveRef = (el: HTMLElement | null) => void | (() => void)
+
+/**
+ * IntersectionObserver で要素の表示状態を通知（未対応環境では何もしない）。
+ * 返すのは ref コールバック。要素が外れたら unobserve して「非表示」を通知する（BACKLOG-2 C18: unobserve 漏れ）。
+ */
+export function useVisibility(onChange: (id: string, visible: boolean) => void): ObserveRef {
   const obs = useRef<IntersectionObserver | null>(null)
   const cb = useRef(onChange)
   cb.current = onChange
@@ -131,6 +145,12 @@ export function useVisibility(onChange: (id: string, visible: boolean) => void) 
       (entries) => entries.forEach((e) => cb.current((e.target as HTMLElement).dataset.placeId ?? '', e.isIntersecting)),
       { rootMargin: '200px 0px' },
     )
-    obs.current.observe(el)
+    const o = obs.current
+    o.observe(el)
+    return () => {
+      o.unobserve(el)
+      const id = el.dataset.placeId
+      if (id) cb.current(id, false)
+    }
   }, [])
 }

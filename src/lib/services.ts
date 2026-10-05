@@ -12,10 +12,14 @@ import type { ElevationSummary, LatLng, Place } from './types'
  */
 export interface Services {
   demo: boolean
-  search(center: LatLng, signal?: AbortSignal): Promise<SearchResult>
+  /** speedKmh: 現在の速度プリセット。検索半径 = 速度 × 90 分（C1） */
+  search(center: LatLng, speedKmh: number, signal?: AbortSignal): Promise<SearchResult>
   elevations(origin: LatLng, places: readonly Place[], signal?: AbortSignal): Promise<Map<string, ElevationSummary | null>>
   photos(places: readonly Place[], width: number, signal?: AbortSignal): Promise<Map<string, PhotoInfo | null>>
-  /** 詳細表示時のみ呼ぶ（経路＋経路沿いの標高） */
+  /**
+   * 詳細表示時のみ呼ぶ（経路＋経路沿いの標高）。
+   * 経路が取れず直線にフォールバックしたときの標高は estimated=true（C3）。
+   */
   routeDetail(origin: LatLng, place: Place, signal?: AbortSignal): Promise<{ route: RouteResult; elevation: ElevationSummary | null }>
   geocode(query: string, signal?: AbortSignal): Promise<GeocodeHit[]>
   placeName(p: LatLng, signal?: AbortSignal): Promise<string | null>
@@ -25,12 +29,13 @@ function mockRouteDetail(origin: LatLng, place: Place) {
   const route = straightRoute(origin, place)
   const bonus = place.category === 'viewpoint' ? 40 : 0
   const profile = mockElevationProfile(origin, place, bonus, routeSampleCount(route.distanceKm))
-  return { route, elevation: summarizeElevation(profile, route.distanceKm, { estimated: false }) }
+  // デモの経路は直線なので「推定」のまま（C3）
+  return { route, elevation: summarizeElevation(profile, route.distanceKm, { estimated: route.source !== 'osrm' }) }
 }
 
 export const realServices: Services = {
   demo: false,
-  search: (center, signal) => searchPlaces(center, { signal }),
+  search: (center, speedKmh, signal) => searchPlaces(center, { signal, speedKmh }),
   elevations: (origin, places, signal) =>
     fetchElevationSummaries(
       origin,
@@ -46,7 +51,11 @@ export const realServices: Services = {
     if (place.source === 'mock') return mockRouteDetail(origin, place)
     const route = await fetchRoute(origin, place, { signal })
     const path = samplePolyline(route.path, routeSampleCount(route.distanceKm))
-    const elevation = await fetchRouteElevationSummary(path, route.distanceKm, { signal }).catch((e) => {
+    // 直線フォールバック時は経路形状が無いので確定値にしない（C3: estimated = source !== 'osrm'）
+    const elevation = await fetchRouteElevationSummary(path, route.distanceKm, {
+      signal,
+      summarize: { estimated: route.source !== 'osrm' },
+    }).catch((e) => {
       if (signal?.aborted) throw e
       return null
     })
@@ -58,7 +67,7 @@ export const realServices: Services = {
 
 export const demoServices: Services = {
   demo: true,
-  search: (center, signal) => searchPlaces(center, { signal, providers: createDemoProviders(), useCache: false }),
+  search: (center, speedKmh, signal) => searchPlaces(center, { signal, speedKmh, providers: createDemoProviders(), useCache: false }),
   elevations: async () => new Map(),
   photos: async () => new Map(),
   routeDetail: async (origin, place) => mockRouteDetail(origin, place),

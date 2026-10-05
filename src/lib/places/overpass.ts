@@ -1,5 +1,5 @@
 import { bearingDeg, haversineKm } from '../geo'
-import { abortError, fetchJson, HttpError, isAbortError, sleep, TimeoutError } from '../http'
+import { abortError, fetchJson, isAbortError, TimeoutError } from '../http'
 import type { Category, LatLng, Place, PlaceProvider } from '../types'
 
 export const OVERPASS_ENDPOINTS = [
@@ -8,16 +8,14 @@ export const OVERPASS_ENDPOINTS = [
   'https://overpass.private.coffee/api/interpreter',
 ] as const
 
-/** Overpass サーバ側タイムアウト (秒) */
-export const OVERPASS_SERVER_TIMEOUT_S = 12
-/** 1 本目エンドポイントのタイムアウト (ms, BACKLOG R6) */
-export const OVERPASS_FIRST_TIMEOUT_MS = 10_000
-/** 検索全体の時間予算 (ms, BACKLOG A1) */
-export const OVERPASS_BUDGET_MS = 14_000
-/** 1 本目が返らないとき 2 本目を並列で投げ始めるまでの待ち (ms) */
-export const OVERPASS_HEDGE_DELAY_MS = 6_000
-/** 429/504 の Retry-After をこの秒数まで尊重して同一エンドポイントに 1 回だけ再試行 */
-export const OVERPASS_MAX_RETRY_AFTER_S = 3
+/** Overpass サーバ側タイムアウト (秒, BACKLOG-2 C1) */
+export const OVERPASS_SERVER_TIMEOUT_S = 25
+/** 1 本目エンドポイントのタイムアウト (ms, BACKLOG-2 C1) */
+export const OVERPASS_FIRST_TIMEOUT_MS = 15_000
+/** 検索全体の時間予算 (ms, BACKLOG-2 C1) */
+export const OVERPASS_BUDGET_MS = 20_000
+/** 1 本目が返らないとき 2 本目を並列で投げ始めるまでの待ち (ms)。失敗したときは待たずに次へ */
+export const OVERPASS_HEDGE_DELAY_MS = 10_000
 /** 公園の最小規模: バウンディングボックス対角 (m)。wikidata / heritage 付きなら小さくても可 */
 export const MIN_PARK_BBOX_DIAGONAL_M = 400
 /** 名前から小規模と判断する公園 */
@@ -32,6 +30,12 @@ interface Selector {
   filter: string
 }
 
+/**
+ * historic は値のホワイトリスト（BACKLOG-2 C1）。historic=* の全件取得は重く、
+ * memorial（記念碑・慰霊碑）や boundary_stone などの小物が大量に混ざるため除外する。
+ */
+export const HISTORIC_WHITELIST = ['castle', 'ruins', 'archaeological_site', 'monument', 'fort', 'city_gate', 'manor'] as const
+
 const NO_BRAND = '[!"brand"][!"brand:wikidata"]'
 /**
  * 取得するセレクタ（BACKLOG Y1/A3）。
@@ -45,7 +49,7 @@ export const OVERPASS_SELECTORS: readonly Selector[] = [
   { kinds: ['node'], filter: `["amenity"="cafe"]["name"]${NO_BRAND}` },
   { kinds: ['node'], filter: `["shop"="bakery"]["name"]${NO_BRAND}` },
   { kinds: ['node', 'area'], filter: '["amenity"="place_of_worship"]["name"]["religion"~"^(shinto|buddhist)$"]' },
-  { kinds: ['node', 'area'], filter: '["historic"]["name"]["historic"!~"^(memorial|boundary_stone|milestone|wayside_shrine|wayside_cross|tomb)$"]' },
+  { kinds: ['node', 'area'], filter: `["historic"~"^(${HISTORIC_WHITELIST.join('|')})$"]["name"]` },
   { kinds: ['node', 'area'], filter: '["natural"="beach"]["name"]' },
   { kinds: ['area'], filter: '["natural"="water"]["name"]["water"~"^(lake|pond|reservoir)$"]' },
   { kinds: ['node', 'area'], filter: '["leisure"="marina"]["name"]' },
@@ -56,18 +60,35 @@ export const OVERPASS_SELECTORS: readonly Selector[] = [
   { kinds: ['node', 'area'], filter: '["highway"~"^(services|rest_area)$"]["name"~"道の駅"]' },
 ]
 
+export interface BBox {
+  s: number
+  w: number
+  n: number
+  e: number
+}
+
+/** 中心と半径 (km) を囲む矩形（小数 4 桁 ≈ 11m で外側に丸める） */
+export function bboxAround(center: LatLng, radiusKm: number): BBox {
+  const dLat = radiusKm / 111.32
+  const dLng = radiusKm / (111.32 * Math.max(0.01, Math.cos((center.lat * Math.PI) / 180)))
+  const down = (v: number) => Math.floor(v * 1e4) / 1e4
+  const up = (v: number) => Math.ceil(v * 1e4) / 1e4
+  return { s: down(center.lat - dLat), w: down(center.lng - dLng), n: up(center.lat + dLat), e: up(center.lng + dLng) }
+}
+
 /**
- * 1 回の検索で 1 リクエストにまとめたクエリ（BACKLOG R6/A3）。
- * around(maxKm) で取得し、ドーナツ・時間帯の絞り込みはクライアント側で行う。
+ * 1 回の検索で 1 リクエストにまとめたクエリ（BACKLOG R6/A3, BACKLOG-2 C1）。
+ * 個々のセレクタに around を付けず、`[bbox:s,w,n,e]` のグローバル指定で範囲を絞る（サーバ負荷が小さい）。
+ * 円形の絞り込み・ドーナツ・時間帯の絞り込みはクライアント側で行う。
  */
-export function buildOverpassQuery(center: LatLng, maxKm: number): string {
-  const around = `(around:${Math.round(maxKm * 1000)},${center.lat.toFixed(4)},${center.lng.toFixed(4)})`
+export function buildOverpassQuery(center: LatLng, radiusKm: number): string {
+  const b = bboxAround(center, radiusKm)
   const group = (kind: SelectorKind) =>
     OVERPASS_SELECTORS.filter((s) => s.kinds.includes(kind)).flatMap((s) =>
-      kind === 'node' ? [`node${s.filter}${around};`] : [`way${s.filter}${around};`, `relation${s.filter}${around};`],
+      kind === 'node' ? [`node${s.filter};`] : [`way${s.filter};`, `relation${s.filter};`],
     )
   return [
-    `[out:json][timeout:${OVERPASS_SERVER_TIMEOUT_S}];`,
+    `[out:json][timeout:${OVERPASS_SERVER_TIMEOUT_S}][bbox:${b.s},${b.w},${b.n},${b.e}];`,
     `(${group('node').join('')})->.n;`,
     `.n out body;`,
     `(${group('park').join('')})->.p;`,
@@ -180,7 +201,10 @@ const KEPT_TAG_KEYS = [
   'cuisine',
 ] as const
 
-export function parseOverpassElements(elements: readonly OverpassElement[], center: LatLng): Place[] {
+/**
+ * Overpass の要素を Place に。radiusKm を渡すと中心からの円の外（bbox の四隅）を除外する（C1）。
+ */
+export function parseOverpassElements(elements: readonly OverpassElement[], center: LatLng, radiusKm = Infinity): Place[] {
   const out: Place[] = []
   const seenIds = new Set<string>()
   for (const el of elements) {
@@ -191,6 +215,8 @@ export function parseOverpassElements(elements: readonly OverpassElement[], cent
     if (!pos) continue
     const id = `osm:${el.type}/${el.id}`
     if (seenIds.has(id)) continue
+    const distanceKm = haversineKm(center, pos)
+    if (distanceKm > radiusKm) continue
     const category = categorizeOsmTags(tags)
     if (!isWorthVisiting(el, category)) continue
     seenIds.add(id)
@@ -204,7 +230,7 @@ export function parseOverpassElements(elements: readonly OverpassElement[], cent
       lat: pos.lat,
       lng: pos.lng,
       category,
-      distanceKm: haversineKm(center, pos),
+      distanceKm,
       bearing: bearingDeg(center, pos),
       tags: kept,
       source: 'overpass',
@@ -278,15 +304,19 @@ export interface OverpassProviderOptions {
   budgetMs?: number
   hedgeDelayMs?: number
   firstTimeoutMs?: number
-  maxRetryAfterS?: number
 }
 
+/**
+ * Overpass プロバイダ。
+ * - 429/504 でも Retry-After には依存しない（CORS ヘッダが無いと読めず、待つより別サーバの方が速い, C12）。
+ *   失敗したら即座に次のエンドポイントへ（hedgeEndpoints）。
+ * - オンラインなのに fetch が TypeError（CORS 無しの 429 等）→ 混雑扱い（fallbackReason 'busy'）で次へ。
+ */
 export function createOverpassProvider({
   endpoints = OVERPASS_ENDPOINTS,
   budgetMs = OVERPASS_BUDGET_MS,
   hedgeDelayMs = OVERPASS_HEDGE_DELAY_MS,
   firstTimeoutMs = OVERPASS_FIRST_TIMEOUT_MS,
-  maxRetryAfterS = OVERPASS_MAX_RETRY_AFTER_S,
 }: OverpassProviderOptions = {}): PlaceProvider {
   return {
     name: 'overpass',
@@ -295,29 +325,13 @@ export function createOverpassProvider({
       // application/x-www-form-urlencoded の POST は CORS の simple request（プリフライト無し）
       const body = new URLSearchParams({ data: query }).toString()
       const init: RequestInit = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body }
-      const attempt = async (endpoint: string, s: AbortSignal, deadline: number, retried = false): Promise<Place[]> => {
+      const attempt = async (endpoint: string, s: AbortSignal, deadline: number): Promise<Place[]> => {
         const remaining = deadline - Date.now()
-        try {
-          const json = await fetchJson<OverpassResponse>(endpoint, init, { signal: s, timeoutMs: Math.max(1, Math.min(firstTimeoutMs, remaining)) })
-          checkOverpassRemark(json)
-          return parseOverpassElements(json.elements ?? [], center)
-        } catch (e) {
-          // 429/504: Retry-After が短く予算内なら、同一エンドポイントに 1 回だけ待ってから再試行
-          if (
-            !retried &&
-            e instanceof HttpError &&
-            (e.status === 429 || e.status === 504) &&
-            e.retryAfterSec !== undefined &&
-            e.retryAfterSec <= maxRetryAfterS &&
-            e.retryAfterSec * 1000 < deadline - Date.now() - 1000
-          ) {
-            await sleep(e.retryAfterSec * 1000, s)
-            return attempt(endpoint, s, deadline, true)
-          }
-          throw e
-        }
+        const json = await fetchJson<OverpassResponse>(endpoint, init, { signal: s, timeoutMs: Math.max(1, Math.min(firstTimeoutMs, remaining)) })
+        checkOverpassRemark(json)
+        return parseOverpassElements(json.elements ?? [], center, maxKm)
       }
-      return hedgeEndpoints(endpoints, (ep, s, deadline) => attempt(ep, s, deadline), { budgetMs, hedgeDelayMs, signal })
+      return hedgeEndpoints(endpoints, attempt, { budgetMs, hedgeDelayMs, signal })
     },
   }
 }

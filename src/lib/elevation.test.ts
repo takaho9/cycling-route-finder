@@ -63,9 +63,20 @@ describe('summarizeElevation', () => {
   })
   it('detects runs of <= 0 m samples (water crossing)', () => {
     expect(summarizeElevation([5, 0, -1, 0, 4], 4).seaRun).toBe(3)
+    expect(looksLikeWaterCrossing(summarizeElevation([5, 0, -1, 0, 4], 4))).toBe(true)
     expect(looksLikeWaterCrossing(summarizeElevation([5, 0, 4, 0, 4], 4))).toBe(false)
-    expect(looksLikeWaterCrossing(summarizeElevation([5, 0, 0, 4], 4))).toBe(true)
     expect(looksLikeWaterCrossing(null)).toBe(false)
+  })
+  it('C8: needs 3+ consecutive <=0m points between endpoints that are both above 0m', () => {
+    expect(looksLikeWaterCrossing(summarizeElevation([5, 0, 0, 4], 4))).toBe(false) // 2 点だけ
+    expect(looksLikeWaterCrossing(summarizeElevation([5, 0, 0, 0, 4], 4))).toBe(true)
+    expect(looksLikeWaterCrossing(summarizeElevation([5, -2, 1, -1, -3, 4], 5))).toBe(false) // 連続していない
+  })
+  it('C8: zero-metre areas (start or end <= 0m) are never treated as water', () => {
+    // 江東区など: 出発地が海抜 -1m、途中もずっと 0m 以下
+    expect(looksLikeWaterCrossing(summarizeElevation([-1, -1, -2, -1, 0, 3], 5))).toBe(false)
+    expect(looksLikeWaterCrossing(summarizeElevation([3, -1, -1, -1, -1, 0], 5))).toBe(false)
+    expect(summarizeElevation([0, -1, -1, -1, 2], 4).seaRun).toBe(0)
   })
 })
 

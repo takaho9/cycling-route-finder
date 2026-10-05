@@ -52,9 +52,9 @@ describe('mock across the whole search band', () => {
   it('every time chip × preset gets enough candidates (log-uniform distances)', async () => {
     const { searchBand, computeReach, ROUND_TRIP_MINUTES, SPEED_PRESETS } = await import('../reach')
     const { filterDonut } = await import('./sampling')
-    const band = searchBand()
-    const all = generateMockPlaces(C, band.minKm, band.maxKm)
     for (const p of Object.values(SPEED_PRESETS)) {
+      const band = searchBand(p.kmh)
+      const all = generateMockPlaces(C, band.minKm, band.maxKm)
       for (const m of ROUND_TRIP_MINUTES) {
         const r = computeReach(m, p.kmh)
         expect(filterDonut(all, r.minKm, r.bandMaxKm).length).toBeGreaterThanOrEqual(12)

@@ -74,9 +74,10 @@ describe('budget / search band', () => {
     expect(isRouteOverBudget(9.6, 60, 16)).toBe(false)
     expect(isRouteOverBudget(9.61, 60, 16)).toBe(true)
   })
-  it('search band covers every preset × time donut', () => {
-    const band = searchBand()
+  it('search band (current speed × 90 min) covers every time donut of that speed (C1)', () => {
     for (const p of Object.values(SPEED_PRESETS)) {
+      const band = searchBand(p.kmh)
+      expect(band.maxKm).toBeCloseTo((p.kmh * 1.5) / 2 / 1.3, 6)
       for (const m of ROUND_TRIP_MINUTES) {
         const r = computeReach(m, p.kmh)
         expect(r.minKm).toBeGreaterThanOrEqual(band.minKm - 1e-9)

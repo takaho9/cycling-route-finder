@@ -3,7 +3,12 @@ import { hangingFetch, jsonResponse, mockFetch } from '../../test/fetchMock'
 import { destinationPoint } from '../geo'
 import { TimeoutError } from '../http'
 import {
+  bboxAround,
   buildOverpassQuery,
+  HISTORIC_WHITELIST,
+  OVERPASS_BUDGET_MS,
+  OVERPASS_FIRST_TIMEOUT_MS,
+  OVERPASS_SERVER_TIMEOUT_S,
   categorizeOsmTags,
   checkOverpassRemark,
   createOverpassProvider,
@@ -29,25 +34,45 @@ function way(id: number, bearing: number, km: number, sizeDeg: number, tags: Rec
   }
 }
 
-describe('buildOverpassQuery', () => {
+describe('buildOverpassQuery (C1: global bbox, no around)', () => {
   const q = buildOverpassQuery(C, 12)
+  it('uses a global [bbox:s,w,n,e] and [timeout:25]; no per-selector around filters', () => {
+    const b = bboxAround(C, 12)
+    expect(q.split('\n')[0]).toBe(`[out:json][timeout:25][bbox:${b.s},${b.w},${b.n},${b.e}];`)
+    expect(OVERPASS_SERVER_TIMEOUT_S).toBe(25)
+    expect(q).not.toContain('around:')
+    // 12km: 緯度 ±0.1078°, 経度 ±0.1325°（北緯35.68°）
+    expect(b.s).toBeCloseTo(35.5734, 3)
+    expect(b.n).toBeCloseTo(35.7891, 3)
+    expect(b.w).toBeCloseTo(139.6346, 3)
+    expect(b.e).toBeCloseTo(139.8997, 3)
+  })
   it('is one query with nodes `out body`, parks `out tags bb`, other areas `out tags center`, no server-side limits', () => {
-    expect(q).toMatch(/^\[out:json\]\[timeout:\d+\];/)
-    expect(q).toContain('(around:12000,35.6812,139.7671)')
     expect(q).toContain('.n out body;')
     expect(q).toContain('.p out tags bb;')
     expect(q).toContain('.a out tags center;')
     expect(q).not.toMatch(/out [a-z ]+ \d+;/)
     expect(q).not.toContain('riverbank')
+    expect(q).toContain('node["amenity"="cafe"]["name"][!"brand"][!"brand:wikidata"];')
   })
   it('includes category selectors and quality filters (Y1)', () => {
-    for (const s of ['"tourism"="viewpoint"', '"amenity"="cafe"', '"shop"="bakery"', '"historic"', '"tourism"="attraction"', '道の駅', 'museum', 'ice_cream']) {
+    for (const s of ['"tourism"="viewpoint"', '"amenity"="cafe"', '"shop"="bakery"', '"tourism"="attraction"', '道の駅', 'museum', 'ice_cream']) {
       expect(q).toContain(s)
     }
     expect(q).toContain('["religion"~"^(shinto|buddhist)$"]')
     expect(q).toContain('[!"brand"]')
     expect(q).toMatch(/way\["leisure"~"\^\(park\|garden\)\$"\]/)
     expect(q).toMatch(/relation\["amenity"="place_of_worship"\]/)
+  })
+  it('historic is a value whitelist (memorial etc. are not fetched)', () => {
+    expect(q).toContain('node["historic"~"^(castle|ruins|archaeological_site|monument|fort|city_gate|manor)$"]["name"];')
+    expect(q).toContain('way["historic"~"^(castle|ruins|archaeological_site|monument|fort|city_gate|manor)$"]["name"];')
+    expect(q).not.toMatch(/\["historic"\]\[/) // historic=* の全件取得はしない
+    expect(HISTORIC_WHITELIST).not.toContain('memorial')
+  })
+  it('timeouts: first endpoint 15s, whole budget 20s', () => {
+    expect(OVERPASS_FIRST_TIMEOUT_MS).toBe(15_000)
+    expect(OVERPASS_BUDGET_MS).toBe(20_000)
   })
 })
 
@@ -61,6 +86,7 @@ describe('categorizeOsmTags', () => {
     [{ shop: 'bakery' }, 'bakery'],
     [{ amenity: 'place_of_worship', religion: 'shinto' }, 'shrine'],
     [{ historic: 'castle' }, 'historic'],
+    [{ historic: 'ruins' }, 'historic'],
     [{ natural: 'beach' }, 'seaside'],
     [{ natural: 'water', water: 'pond' }, 'waterside'],
     [{ tourism: 'museum' }, 'museum'],
@@ -95,6 +121,14 @@ describe('parseOverpassElements', () => {
     expect(ps[0].tags).toEqual({ name: '東珈琲', wikidata: 'Q123', image: 'File:A.jpg', amenity: 'cafe' })
     expect(Number(ps[1].tags?.size_m)).toBeGreaterThan(1000)
     expect(ps[3]).toMatchObject({ lat: 35.7, lng: 139.8 })
+  })
+})
+
+describe('parseOverpassElements circle filter (C1)', () => {
+  it('drops elements in the bbox corners outside the radius', () => {
+    const els = [node(1, 0, 9.5, { amenity: 'cafe', name: '内側' }), node(2, 45, 11, { amenity: 'cafe', name: '四隅' })]
+    expect(parseOverpassElements(els, C, 10).map((p) => p.name)).toEqual(['内側'])
+    expect(parseOverpassElements(els, C).map((p) => p.name)).toEqual(['内側', '四隅'])
   })
 })
 
@@ -150,13 +184,30 @@ describe('createOverpassProvider', () => {
     expect(f.mock.calls.map(([u]) => String(u))).toEqual(['https://a.test/api', 'https://b.test/api'])
   })
 
-  it('honors a short Retry-After once on the same endpoint', async () => {
-    let n = 0
-    const f = mockFetch(() =>
-      n++ === 0 ? new Response('{}', { status: 429, headers: { 'Retry-After': '0' } }) : jsonResponse({ elements }),
+  it('does not wait for Retry-After: 429 with Retry-After moves to the next endpoint immediately (C12)', async () => {
+    const f = mockFetch((url) =>
+      url.startsWith('https://a.test') ? new Response('{}', { status: 429, headers: { 'Retry-After': '2' } }) : jsonResponse({ elements }),
     )
-    expect(await createOverpassProvider({ endpoints: ['https://a.test/api'], ...opts }).search(C, 1, 12)).toHaveLength(2)
+    const t0 = Date.now()
+    expect(await createOverpassProvider({ endpoints: ['https://a.test/api', 'https://b.test/api'], ...opts }).search(C, 1, 12)).toHaveLength(2)
+    expect(Date.now() - t0).toBeLessThan(1000)
+    expect(f.mock.calls.map(([u]) => String(u))).toEqual(['https://a.test/api', 'https://b.test/api'])
+  })
+
+  it('a TypeError (e.g. 429 without CORS headers) moves on to the next endpoint (C12)', async () => {
+    const f = mockFetch((url) => (url.startsWith('https://a.test') ? Promise.reject(new TypeError('Failed to fetch')) : jsonResponse({ elements })))
+    expect(await createOverpassProvider({ endpoints: ['https://a.test/api', 'https://b.test/api'], ...opts }).search(C, 1, 12)).toHaveLength(2)
     expect(f).toHaveBeenCalledTimes(2)
+  })
+
+  it('sends the bbox query and filters the circle client-side', async () => {
+    const far = node(3, 45, 11.9, { amenity: 'cafe', name: '四隅カフェ' })
+    const f = mockFetch(() => jsonResponse({ elements: [...elements, far] }))
+    const res = await createOverpassProvider({ endpoints: ['https://a.test/api'], ...opts }).search(C, 1, 10)
+    expect(res.map((x) => x.name).sort()).toEqual(['カフェA', '展望台B'])
+    const sent = new URLSearchParams(String(f.mock.calls[0][1]?.body)).get('data')!
+    expect(sent).toContain('[bbox:')
+    expect(sent).not.toContain('around:')
   })
 
   it('treats a remark runtime error as a failure and moves on', async () => {

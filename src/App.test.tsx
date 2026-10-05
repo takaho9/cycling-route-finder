@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import App from './App'
 import { clearPlacesCache } from './lib/places'
-import { demoServices } from './lib/services'
+import { demoServices, type Services } from './lib/services'
 import { loadDeparture, loadRides, loadSettings, STORAGE_KEYS } from './lib/storage'
 import { mockFetch } from './test/fetchMock'
 import { mockGeolocation } from './test/geo'
@@ -27,6 +27,18 @@ async function openResults() {
 beforeEach(() => {
   clearPlacesCache()
 })
+
+/** デモデータのまま、経路だけ OSRM で取れたことにする（経路距離 = 直線 × 1.25） */
+const routedServices: Services = {
+  ...demoServices,
+  async routeDetail(origin, place) {
+    const r = await demoServices.routeDetail(origin, place)
+    return {
+      route: { ...r.route, source: 'osrm', distanceKm: r.route.distanceKm * 1.25 },
+      elevation: r.elevation && { ...r.elevation, estimated: false },
+    }
+  },
+}
 
 describe('App — home', () => {
   it('shows the time dial, location, sunset and the CTA', async () => {
@@ -149,7 +161,7 @@ describe('App — results', () => {
   })
   it('route-based elevation from the detail replaces the estimated label on the card (R3/A8)', async () => {
     mockGeolocation(TOKYO)
-    render(<App services={demoServices} now={now} />)
+    render(<App services={routedServices} now={now} />)
     await openResults()
     const recs = screen.getByRole('region', { name: '今日のおすすめ' })
     const card = within(recs).getAllByRole('article')[0]

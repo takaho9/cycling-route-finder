@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { hangingFetch, jsonResponse, mockFetch } from '../test/fetchMock'
-import { clearPhotoCache, commonsFileFromTags, fetchWikidataP18, normalizeFileTitle, resolvePhotos } from './photos'
+import { clearPhotoCache, commonsFileFromTags, fetchWikidataP18, nameFragments, normalizeFileTitle, resolvePhotos, titleMatchesName } from './photos'
 
 beforeEach(() => clearPhotoCache())
 
@@ -27,7 +27,7 @@ function imageinfo(titles: string[], extra: Record<string, unknown> = {}) {
     },
   }
 }
-const base = { lat: 35.68, lng: 139.76 }
+const base = { lat: 35.68, lng: 139.76, category: 'park' as const }
 
 describe('commonsFileFromTags (Commons only)', () => {
   it.each([
@@ -94,13 +94,44 @@ describe('resolvePhotos', () => {
     )
     expect(m.get('a')).toMatchObject({ url: thumb('Tag_photo.jpg'), artist: '山田 太郎', license: 'CC BY-SA 4.0' })
     expect(m.get('b')?.url).toBe(thumb('Wd_photo.jpg'))
-    expect(m.get('c')?.url).toBe(thumb('Near.jpg'))
+    expect(m.get('c')).toMatchObject({ url: thumb('Near.jpg'), nearby: true })
+    expect(m.get('a')?.nearby).toBeUndefined()
     const imageinfoCalls = f.mock.calls.filter(([u]) => new URL(String(u)).searchParams.has('titles'))
     expect(imageinfoCalls).toHaveLength(1) // a + b in one batch
     expect(new URL(String(imageinfoCalls[0][0])).searchParams.get('iiurlwidth')).toBe('500')
     const geo = f.mock.calls.find(([u]) => new URL(String(u)).searchParams.get('generator') === 'geosearch')!
     expect(new URL(String(geo[0])).searchParams.get('ggsradius')).toBe('100')
     expect(new URL(String(geo[0])).searchParams.get('ggsnamespace')).toBe('6')
+  })
+
+  it('C11: nearby search only for parks / viewpoints / shrines / historic sites', async () => {
+    const f = mockFetch(() => jsonResponse(imageinfo(['File:Near.jpg'])))
+    const m = await resolvePhotos([
+      { id: 'cafe', ...base, category: 'cafe', name: 'カフェ' },
+      { id: 'museum', ...base, category: 'museum', name: '美術館' },
+      { id: 'shrine', ...base, category: 'shrine', name: '湯島天満宮' },
+    ])
+    expect(m.get('cafe')).toBeNull()
+    expect(m.get('museum')).toBeNull()
+    expect(m.get('shrine')?.nearby).toBe(true)
+    expect(f).toHaveBeenCalledTimes(1)
+  })
+
+  it('C11: prefers a nearby file whose name contains part of the place name', async () => {
+    mockFetch(() => {
+      const r = imageinfo(['File:Street corner 2019.jpg', 'File:光が丘の桜並木.jpg'])
+      Object.values(r.query.pages).forEach((p, i) => Object.assign(p, { index: i + 1 }))
+      return jsonResponse(r)
+    })
+    const m = await resolvePhotos([{ id: 'p', ...base, name: '光が丘公園' }])
+    expect(m.get('p')).toMatchObject({ url: thumb('光が丘の桜並木.jpg'), nearby: true })
+  })
+
+  it('C11: name fragments ignore generic words (公園/神社/寺…) and need 2+ chars', () => {
+    expect(nameFragments('光が丘公園')).toEqual(['光が', 'が丘'])
+    expect(nameFragments('天神社')).toEqual([]) // 「天」1 文字しか残らない
+    expect(titleMatchesName('File:Yushima_Tenmangu_湯島.jpg', '湯島天満宮')).toBe(true)
+    expect(titleMatchesName('File:Some park.jpg', '中央公園')).toBe(false)
   })
 
   it('null when nothing found; caches the miss', async () => {

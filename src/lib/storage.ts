@@ -1,4 +1,5 @@
 import { DEFAULT_SPEED_PRESET, SPEED_PRESETS, type SpeedPresetId } from './reach'
+import { haversineKm } from './geo'
 import type { Category, LatLng, Place } from './types'
 
 const PREFIX = 'choichari:v1:'
@@ -371,6 +372,16 @@ export interface LastResult {
 export function loadLastResult(storage?: Storage | null): LastResult | null {
   const v = readJson<LastResult | null>(KEYS.lastResult, null, storage)
   return v && Array.isArray(v.places) ? v : null
+}
+
+/** オフライン時に前回結果を使うのは、出発地がこの距離 (km) 以内のときだけ（BACKLOG-2 C5） */
+export const LAST_RESULT_MAX_KM = 1
+
+/** 前回の結果のうち、origin から 1km 以内で保存されたものだけ返す（C5） */
+export function loadLastResultNear(origin: LatLng, storage?: Storage | null, maxKm = LAST_RESULT_MAX_KM): LastResult | null {
+  const last = loadLastResult(storage)
+  if (!last || typeof last.origin?.lat !== 'number' || typeof last.origin?.lng !== 'number') return null
+  return haversineKm(origin, last.origin) <= maxKm ? last : null
 }
 
 export function saveLastResult(r: LastResult, storage?: Storage | null): boolean {

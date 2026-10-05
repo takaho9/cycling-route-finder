@@ -1,4 +1,4 @@
-import { fetchJson, sleep, type RequestOptions } from './http'
+import { abortError, fetchJson, sleep, type RequestOptions } from './http'
 import type { LatLng } from './types'
 
 /**
@@ -8,20 +8,33 @@ import type { LatLng } from './types'
 export const NOMINATIM_URL = 'https://nominatim.openstreetmap.org'
 const MIN_INTERVAL_MS = 1100
 let lastCall = 0
+/** 直列化のための Promise チェーン（BACKLOG-2 C20）。同時に呼ばれても 1 件ずつ、間隔をあけて投げる */
+let chain: Promise<unknown> = Promise.resolve()
 
 export interface GeocodeHit extends LatLng {
   label: string
 }
 
-async function throttle(signal?: AbortSignal) {
-  const wait = lastCall + MIN_INTERVAL_MS - Date.now()
-  if (wait > 0) await sleep(wait, signal)
-  lastCall = Date.now()
+/**
+ * Nominatim へのリクエストを直列化し、前回の送信から MIN_INTERVAL_MS 空ける。
+ * 同時に 2 件来ても、前の呼び出しが終わってから次を投げる（並行に投げて 1 秒 1 件を破らない）。
+ */
+function serialized<T>(task: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+  const run = chain.then(async () => {
+    const wait = lastCall + MIN_INTERVAL_MS - Date.now()
+    if (wait > 0) await sleep(wait, signal)
+    else if (signal?.aborted) throw abortError()
+    lastCall = Date.now()
+    return task()
+  })
+  chain = run.catch(() => {})
+  return run
 }
 
 /** テスト用 */
 export function resetGeocodeThrottle(): void {
   lastCall = 0
+  chain = Promise.resolve()
 }
 
 interface NominatimHit {
@@ -35,9 +48,8 @@ interface NominatimHit {
 export async function geocode(query: string, opts: RequestOptions = {}): Promise<GeocodeHit[]> {
   const q = query.trim()
   if (!q) return []
-  await throttle(opts.signal)
   const url = `${NOMINATIM_URL}/search?format=jsonv2&limit=5&accept-language=ja&countrycodes=jp&q=${encodeURIComponent(q)}`
-  const hits = await fetchJson<NominatimHit[]>(url, undefined, { timeoutMs: 8_000, ...opts })
+  const hits = await serialized(() => fetchJson<NominatimHit[]>(url, undefined, { timeoutMs: 8_000, ...opts }), opts.signal)
   return (Array.isArray(hits) ? hits : [])
     .map((h) => ({
       lat: Number(h.lat),
@@ -65,9 +77,8 @@ interface NominatimReverse {
 /** 現在地ピル用の地名（座標は小数 3 桁に丸めて送る）。失敗時 null */
 export async function reverseGeocode(p: LatLng, opts: RequestOptions = {}): Promise<string | null> {
   try {
-    await throttle(opts.signal)
     const url = `${NOMINATIM_URL}/reverse?format=jsonv2&zoom=16&accept-language=ja&lat=${p.lat.toFixed(3)}&lon=${p.lng.toFixed(3)}`
-    const json = await fetchJson<NominatimReverse>(url, undefined, { timeoutMs: 6_000, ...opts })
+    const json = await serialized(() => fetchJson<NominatimReverse>(url, undefined, { timeoutMs: 6_000, ...opts }), opts.signal)
     const a = json.address ?? {}
     const city = a.city_district ?? a.city ?? a.town ?? a.village ?? a.county ?? ''
     const area = a.suburb ?? a.quarter ?? a.neighbourhood ?? ''

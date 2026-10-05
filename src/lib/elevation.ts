@@ -23,8 +23,11 @@ export type ElevationRules = { -readonly [K in keyof typeof ELEVATION_RULES]: nu
 
 /** 獲得標高のヒステリシス既定値 (m, BACKLOG A8) */
 export const DEFAULT_NOISE_THRESHOLD_M = 5
-/** 海上判定: 標高 <= 0 のサンプルがこの数以上連続したら「水面を横切るかも」 */
-export const SEA_RUN_THRESHOLD = 2
+/**
+ * 水面判定（BACKLOG-2 C8）: 始点と終点が 0m より上で、その間の標高 <= 0m がこの数以上連続したら「水面を横切るかも」。
+ * 始点か終点が 0m 以下（ゼロメートル地帯）のときは判定しない。
+ */
+export const SEA_RUN_THRESHOLD = 3
 
 export const OPEN_METEO_ELEVATION_URL = 'https://api.open-meteo.com/v1/elevation'
 /** Open-Meteo Elevation API の 1 リクエストあたり最大座標数 */
@@ -93,16 +96,13 @@ export function summarizeElevation(
   const step = elevations.length > 1 ? distanceKm / (elevations.length - 1) : 0
   const profile: number[] = []
   const profileKm: number[] = []
-  let seaRun = 0
-  let run = 0
   elevations.forEach((e, i) => {
     if (typeof e === 'number' && Number.isFinite(e)) {
       profile.push(e)
       profileKm.push(i * step)
-      run = e <= 0 ? run + 1 : 0
-      seaRun = Math.max(seaRun, run)
     }
   })
+  const seaRun = interiorSeaRun(profile)
   let gain = 0
   let loss = 0
   if (profile.length >= 2) {
@@ -138,7 +138,23 @@ export function summarizeElevation(
   return { ...summary, label }
 }
 
-/** 直線サンプルが海上・水面を横切っていそうか（R5: 順位を下げる目安） */
+/**
+ * 始点・終点が 0m より上のときだけ、その間で標高 <= 0m が連続した最大数（C8）。
+ * 始点か終点が 0m 以下（ゼロメートル地帯・埋立地）なら 0。
+ */
+export function interiorSeaRun(profile: readonly number[]): number {
+  const n = profile.length
+  if (n < 3 || !(profile[0] > 0) || !(profile[n - 1] > 0)) return 0
+  let max = 0
+  let run = 0
+  for (let i = 1; i < n - 1; i++) {
+    run = profile[i] <= 0 ? run + 1 : 0
+    if (run > max) max = run
+  }
+  return max
+}
+
+/** 直線サンプルが海上・水面を横切っていそうか（R5/C8: 一覧の並びを下げる目安。おすすめには使わない） */
 export function looksLikeWaterCrossing(s: Pick<ElevationSummary, 'seaRun'> | null | undefined): boolean {
   return !!s && s.seaRun >= SEA_RUN_THRESHOLD
 }

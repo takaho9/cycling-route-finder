@@ -58,17 +58,37 @@ export function isAbortError(e: unknown): boolean {
   return typeof e === 'object' && e !== null && (e as { name?: unknown }).name === 'AbortError'
 }
 
+/** p を signal の abort と競争させる（abort されたら AbortError で reject） */
+function raceAbort<T>(p: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(abortError())
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(abortError())
+    signal.addEventListener('abort', onAbort, { once: true })
+    p.then(
+      (v) => {
+        signal.removeEventListener('abort', onAbort)
+        resolve(v)
+      },
+      (e) => {
+        signal.removeEventListener('abort', onAbort)
+        reject(e)
+      },
+    )
+  })
+}
+
 /**
- * fetch + タイムアウト + 呼び出し元の AbortSignal 連携。
- * - 呼び出し元が abort → AbortError を throw
- * - タイムアウト → TimeoutError を throw
- * - 非 2xx → HttpError を throw
+ * fetch ＋ 後処理（本文の読み取りなど）を、ひとつのタイムアウトと abort の下で実行する（BACKLOG-2 C14）。
+ * - 呼び出し元が abort → AbortError
+ * - タイムアウト（本文の読み取り中も含む）→ TimeoutError
+ * - 非 2xx → HttpError
  */
-export async function fetchWithTimeout(
+export async function requestWithTimeout<T>(
   url: string,
-  init: RequestInit = {},
-  { signal, timeoutMs = DEFAULT_TIMEOUT_MS }: RequestOptions = {},
-): Promise<Response> {
+  init: RequestInit,
+  { signal, timeoutMs = DEFAULT_TIMEOUT_MS }: RequestOptions,
+  read: (res: Response) => Promise<T>,
+): Promise<T> {
   if (signal?.aborted) throw abortError()
   const controller = new AbortController()
   let timedOut = false
@@ -79,9 +99,15 @@ export async function fetchWithTimeout(
   const onAbort = () => controller.abort()
   signal?.addEventListener('abort', onAbort, { once: true })
   try {
-    const res = await fetch(url, { ...init, signal: controller.signal })
-    if (!res.ok) throw new HttpError(res.status, url, parseRetryAfter(res.headers.get('Retry-After')))
-    return res
+    // 本文のストリームは fetch の signal で止まらない実装もあるので、読み取りも abort と競争させる
+    return await raceAbort(
+      (async () => {
+        const res = await fetch(url, { ...init, signal: controller.signal })
+        if (!res.ok) throw new HttpError(res.status, url, parseRetryAfter(res.headers.get('Retry-After')))
+        return read(res)
+      })(),
+      controller.signal,
+    )
   } catch (e) {
     if (timedOut) throw new TimeoutError(timeoutMs)
     if (signal?.aborted) throw abortError()
@@ -92,9 +118,14 @@ export async function fetchWithTimeout(
   }
 }
 
-export async function fetchJson<T>(url: string, init?: RequestInit, opts?: RequestOptions): Promise<T> {
-  const res = await fetchWithTimeout(url, init, opts)
-  return (await res.json()) as T
+/** fetch + タイムアウト + 呼び出し元の AbortSignal 連携（ヘッダ受信まで）。本文も読むなら fetchJson を使う */
+export function fetchWithTimeout(url: string, init: RequestInit = {}, opts: RequestOptions = {}): Promise<Response> {
+  return requestWithTimeout(url, init, opts, async (res) => res)
+}
+
+/** JSON を取得。本文のパースが終わるまでタイムアウトと abort を維持する（C14） */
+export function fetchJson<T>(url: string, init: RequestInit = {}, opts: RequestOptions = {}): Promise<T> {
+  return requestWithTimeout(url, init, opts, async (res) => (await res.json()) as T)
 }
 
 /** 小さな同時実行数制限付き map */

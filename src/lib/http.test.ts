@@ -50,3 +50,31 @@ describe('mapWithConcurrency', () => {
     expect(peak).toBe(2)
   })
 })
+
+describe('fetchJson keeps timeout and abort until the body is parsed (C14)', () => {
+  /** ヘッダはすぐ返るが本文が届かないレスポンス */
+  const stalledBody = () => new Response(new ReadableStream({ start() {} }), { status: 200 })
+
+  it('times out while reading the body', async () => {
+    vi.useFakeTimers()
+    mockFetch(stalledBody)
+    const p = fetchJson('https://x.test', {}, { timeoutMs: 1000 })
+    const assertion = expect(p).rejects.toBeInstanceOf(TimeoutError)
+    await vi.advanceTimersByTimeAsync(1001)
+    await assertion
+  })
+
+  it('aborts while reading the body', async () => {
+    mockFetch(stalledBody)
+    const ac = new AbortController()
+    const p = fetchJson('https://x.test', {}, { signal: ac.signal, timeoutMs: 60_000 })
+    await new Promise((r) => setTimeout(r, 5))
+    ac.abort()
+    await expect(p).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
+  it('a broken JSON body is a parse error, not a timeout', async () => {
+    mockFetch(() => new Response('{broken', { status: 200 }))
+    await expect(fetchJson('https://x.test')).rejects.toBeInstanceOf(SyntaxError)
+  })
+})

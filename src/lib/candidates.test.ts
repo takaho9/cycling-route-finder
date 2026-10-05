@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filterAndSort, pickGacha, pickRecommendations, selectCandidates } from './candidates'
+import { filterAndSort, OFFLINE_PER_TIME, pickGacha, pickRecommendations, placesForOffline, recommendationKey, selectCandidates } from './candidates'
 import { summarizeElevation } from './elevation'
 import { computeReach } from './reach'
 import type { Category, ElevationSummary, Place } from './types'
@@ -72,11 +72,11 @@ describe('pickRecommendations (daily, unvisited first, varied)', () => {
   const list = cats.map((category) => P({ category }))
 
   it('is stable within a day and changes across days', () => {
-    const a = pickRecommendations(list, { dateKey: '2026-10-07', visited: new Set() })
-    const b = pickRecommendations(list, { dateKey: '2026-10-07', visited: new Set() })
+    const a = pickRecommendations(list, { key: '2026-10-07', visited: new Set() })
+    const b = pickRecommendations(list, { key: '2026-10-07', visited: new Set() })
     expect(a.map((p) => p.id)).toEqual(b.map((p) => p.id))
     const days = ['2026-10-08', '2026-10-09', '2026-10-10', '2026-10-11'].map((d) =>
-      pickRecommendations(list, { dateKey: d, visited: new Set() })
+      pickRecommendations(list, { key: d, visited: new Set() })
         .map((p) => p.id)
         .join(),
     )
@@ -84,18 +84,35 @@ describe('pickRecommendations (daily, unvisited first, varied)', () => {
   })
 
   it('returns 3 places of different categories when possible', () => {
-    const r = pickRecommendations(list, { dateKey: '2026-10-07', visited: new Set() })
+    const r = pickRecommendations(list, { key: '2026-10-07', visited: new Set() })
     expect(r).toHaveLength(3)
     expect(new Set(r.map((p) => p.category)).size).toBe(3)
   })
 
-  it('prefers unvisited places and demotes water crossings', () => {
+  it('prefers unvisited places', () => {
     const visited = new Set(list.slice(0, 6).map((p) => p.id))
-    const r = pickRecommendations(list, { dateKey: '2026-10-07', visited })
+    const r = pickRecommendations(list, { key: '2026-10-07', visited })
     expect(r.filter((p) => !visited.has(p.id)).length).toBeGreaterThanOrEqual(2)
-    const wet = P({ category: 'seaside', elevation: SEA })
-    expect(pickRecommendations([...list, wet], { dateKey: '2026-10-07', visited: new Set() }).map((p) => p.id)).not.toContain(wet.id)
   })
+
+  it('C7: elevation arriving later never reorders the picks (water penalty is for the list only)', () => {
+    const key = recommendationKey({ dateKey: '2026-10-07', minutes: 45, origin: { lat: 35.68123, lng: 139.76712 }, speedKmh: 16 })
+    const before = pickRecommendations(list, { key, visited: new Set() }).map((p) => p.id)
+    const withElevation = list.map((p, i) => ({ ...p, elevation: [FLAT, SEA, HILLY, ROLLING][i % 4] }))
+    const after = pickRecommendations(withElevation, { key, visited: new Set() }).map((p) => p.id)
+    expect(after).toEqual(before)
+  })
+
+  it('C7: the key is dateKey + time + origin (~100m) + speed', () => {
+    const base = { dateKey: '2026-10-07', minutes: 45, origin: { lat: 35.68123, lng: 139.76712 }, speedKmh: 16 }
+    const k = recommendationKey(base)
+    expect(k).toBe('2026-10-07|45|35.681,139.767|16')
+    expect(recommendationKey({ ...base, origin: { lat: 35.68131, lng: 139.76705 } })).toBe(k) // GPS のゆれでは変わらない
+    expect(recommendationKey({ ...base, minutes: 60 })).not.toBe(k)
+    expect(recommendationKey({ ...base, speedKmh: 20 })).not.toBe(k)
+    expect(recommendationKey({ ...base, dateKey: '2026-10-08' })).not.toBe(k)
+  })
+
 })
 
 describe('pickGacha', () => {
@@ -104,5 +121,21 @@ describe('pickGacha', () => {
     expect(pickGacha(list, list[0].id, () => 0)?.id).toBe(list[1].id)
     expect(pickGacha([list[0]], list[0].id, () => 0)?.id).toBe(list[0].id)
     expect(pickGacha([], null)).toBeNull()
+  })
+})
+
+describe('placesForOffline (C5: store only the displayed top)', () => {
+  it('keeps at most OFFLINE_PER_TIME per time chip, union, with only the needed tags', () => {
+    const all: Place[] = []
+    for (let i = 0; i < 600; i++) {
+      all.push(P({ distanceKm: 0.5 + (i % 120) * 0.1, bearing: (i * 37) % 360, category: (['park', 'cafe', 'shrine'] as const)[i % 3], tags: { name: 'x', wikidata: `Q${i}`, opening_hours: '24/7' } }))
+    }
+    const saved = placesForOffline(all, 16)
+    expect(saved.length).toBeLessThanOrEqual(6 * OFFLINE_PER_TIME)
+    expect(saved.length).toBeGreaterThan(OFFLINE_PER_TIME)
+    expect(new Set(saved.map((p) => p.id)).size).toBe(saved.length)
+    expect(saved[0].tags).toEqual({ name: 'x', wikidata: expect.stringMatching(/^Q/) })
+    // 保存した中からでも、各時間チップの表示は作れる
+    expect(selectCandidates(saved, 45, 16).length).toBeGreaterThan(0)
   })
 })
