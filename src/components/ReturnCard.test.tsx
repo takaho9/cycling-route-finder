@@ -16,7 +16,7 @@ describe('ReturnCard', () => {
     const region = screen.getByRole('region', { name: '湯島天満宮、行ってきた？' })
     expect(region.textContent).toContain('⛩️')
     fireEvent.click(screen.getByRole('button', { name: '✓ 走った' }))
-    fireEvent.click(screen.getByRole('button', { name: '✕ 行かなかった' }))
+    fireEvent.click(screen.getByRole('button', { name: '行かなかった' }))
     expect(onYes).toHaveBeenCalledTimes(1)
     expect(onNo).toHaveBeenCalledTimes(1)
   })

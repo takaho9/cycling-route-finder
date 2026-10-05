@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { formatMinutesJa } from '../lib/reach'
 import type { DaylightStatus } from '../lib/sun'
-import { POOR_ACCURACY_M, type LocateStatus } from '../hooks/useOrigin'
+import { LOCATE_MESSAGES, POOR_ACCURACY_M, type LocateError, type LocateStatus } from '../hooks/useOrigin'
 import { ChevronRight, PinIcon } from './Icons'
 import type { Origin } from './types'
 
@@ -14,10 +14,13 @@ export function OfflineStrip({ stale }: { stale: boolean }) {
   )
 }
 
-/** 現在地ピル（タップで手動変更）。仮の出発地・低精度は gold 縁取り */
+/**
+ * 現在地ピル（タップで手動変更）。仮の出発地・低精度は gold 縁取り。
+ * 出発地が未確定（位置情報オフ）のときは下の案内カードが gold 枠なので、ピルは縁取りしない（D15: 二重表示の解消）。
+ */
 export function LocationPill({ origin, status, onChange }: { origin: Origin | null; status: LocateStatus; onChange: () => void }) {
   const poor = origin?.kind === 'gps' && (origin.accuracyM ?? 0) > POOR_ACCURACY_M
-  const warn = origin?.kind === 'demo' || poor || (!origin && status === 'denied')
+  const warn = origin?.kind === 'demo' || poor
   let label: string
   if (!origin) label = status === 'locating' ? '現在地をさがし中…' : '出発地をえらんでね'
   else if (origin.kind === 'demo') label = `${origin.label}（仮の出発地）`
@@ -37,16 +40,34 @@ export function LocationPill({ origin, status, onChange }: { origin: Origin | nu
   )
 }
 
-/** 位置情報オフ時のインラインカード（Y6: 自動で東京駅を検索しない） */
-export function LocationNotice({ onChoose, onDemo }: { onChoose: () => void; onDemo: () => void }) {
+/** 位置情報が取れないときのインラインカード（Y6: 自動で東京駅を検索しない。C9: 理由ごとに文言を分ける） */
+export function LocationNotice({
+  error,
+  onChoose,
+  onDemo,
+  onRetry,
+}: {
+  error: LocateError | null
+  onChoose: () => void
+  onDemo: () => void
+  onRetry?: () => void
+}) {
+  const titleId = useId()
+  const m = LOCATE_MESSAGES[error ?? 'denied']
+  const canRetry = !!onRetry && (error === 'timeout' || error === 'unavailable')
   return (
-    <section className="notice-card" aria-labelledby="loc-notice-title">
-      <p id="loc-notice-title" className="notice-card__title">
-        位置情報がオフみたい。出発地をえらぼう
+    <section className="notice-card" aria-labelledby={titleId}>
+      <p id={titleId} className="notice-card__title">
+        {m.title}
       </p>
-      <p className="notice-card__body">駅名や住所でさがせるよ。まず試すだけなら東京駅からでも OK。</p>
+      <p className="notice-card__body">{m.body}</p>
       <div className="notice-card__actions">
-        <button type="button" className="btn btn--accent pressable" onClick={onChoose}>
+        {canRetry && (
+          <button type="button" className="btn btn--accent pressable" onClick={onRetry}>
+            もう一度ためす
+          </button>
+        )}
+        <button type="button" className={`btn ${canRetry ? 'btn--outline' : 'btn--accent'} pressable`} onClick={onChoose}>
           出発地を選ぶ
         </button>
         <button type="button" className="btn btn--outline pressable" onClick={onDemo}>

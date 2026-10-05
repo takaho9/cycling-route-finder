@@ -22,8 +22,12 @@
   --c-danger: #d63031;
   --c-scrim: rgba(15, 20, 25, 0.45);
   --c-white: #ffffff;
-  --c-pill-on-photo: rgba(255, 255, 255, 0.9);
+  --c-pill-on-photo: rgba(255, 255, 255, 0.88);
   --c-pill-on-photo-text: #1c1b1a;
+  /* 高低差バッジ: 淡い背景＋濃い文字（BACKLOG-2 D11） */
+  --c-flat-soft: #e1f4e9;
+  --c-rolling-soft: #fff0c2;
+  --c-hill-soft: #fde2e2;
   --c-photo-overlay: linear-gradient(180deg, rgba(0, 0, 0, 0) 40%, rgba(0, 0, 0, 0.65) 100%);
   --g-hero: linear-gradient(135deg, #ff5a1f 0%, #ff8a3d 45%, #ffb800 100%);
   --g-hero-1: #ff5a1f;
@@ -124,6 +128,12 @@
     --g-hero-2: #ff9846;
     --g-hero-3: #ffb547;
     --c-photo-filter: brightness(0.9);
+    /* 写真上のピルは半透明の暗色（D7） */
+    --c-pill-on-photo: rgba(15, 20, 25, 0.62);
+    --c-pill-on-photo-text: #f3f1ec;
+    --c-flat-soft: rgba(61, 214, 140, 0.16);
+    --c-rolling-soft: rgba(255, 201, 61, 0.16);
+    --c-hill-soft: rgba(255, 107, 110, 0.16);
     --c-primary-ink: #ff8a5c;
     --c-accent-strong: #3cc6c0;
     --c-accent-ink: #3cc6c0;

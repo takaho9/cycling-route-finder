@@ -3,27 +3,44 @@
   position: fixed;
   inset: 0;
   z-index: 60;
-  display: grid;
-  place-items: center;
-  padding: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--sp-4) var(--sp-4) calc(var(--sp-4) + var(--safe-bottom));
   overflow-y: auto;
 }
+/* 背景をぼかして結果カードに集中（D3） */
 .gacha__scrim {
   position: fixed;
   inset: 0;
   background: var(--c-gacha-scrim);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
   animation: fade-in var(--dur-base) var(--ease-out);
 }
 .gacha__stage {
+  margin: auto;
   position: relative;
   display: grid;
   justify-items: center;
   gap: var(--sp-6);
 }
 .gacha__thinking {
+  display: grid;
+  gap: var(--sp-1);
   color: var(--c-white);
+  text-align: center;
   font-size: var(--fs-h2);
   font-weight: 700;
+}
+.gacha__pool {
+  font-size: var(--fs-sub);
+  font-weight: 500;
+  opacity: 0.85;
+}
+.gacha__pool .num {
+  font-size: 18px;
+  font-weight: 800;
 }
 .capsule {
   position: relative;
@@ -117,10 +134,16 @@
 
 .gacha__result {
   position: relative;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: var(--sp-4);
+  flex: 1 0 auto;
   width: min(100%, 420px);
   animation: result-up 450ms var(--ease-out) both;
+}
+/* ボタン群は下寄せ（親指ゾーン, D3） */
+.gacha__result .card {
+  overflow: hidden;
 }
 @keyframes result-up {
   from {
@@ -129,6 +152,7 @@
   }
 }
 .gacha__title {
+  margin-top: var(--sp-6);
   color: var(--c-white);
   text-align: center;
   font-size: var(--fs-h1);
@@ -144,13 +168,22 @@
 .gacha__actions {
   display: grid;
   gap: var(--sp-2);
+  margin-top: auto;
+}
+/* 「くわしく見る」「やめとく」はテキストリンク（D3） */
+.gacha__link {
+  justify-self: center;
+  min-height: 40px;
+  padding: 0 var(--sp-4);
+  color: var(--c-white);
+  font-size: var(--fs-sub);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .gacha__cancel {
-  justify-self: center;
-  min-width: 120px;
-  border-radius: var(--r-pill);
-  background: rgba(255, 255, 255, 0.14);
-  color: var(--c-white);
+  font-weight: 500;
+  opacity: 0.85;
 }
 .gacha--reduced .gacha__result {
   animation: fade-in var(--dur-fast) linear both;

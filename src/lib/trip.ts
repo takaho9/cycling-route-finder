@@ -14,7 +14,7 @@ export interface TripInput {
 
 export interface TripEstimate {
   mode: TripMode
-  /** 片道の走行距離 (km) */
+  /** 片道の走行距離 (km, 0.1km 単位) */
   oneWayKm: number
   /** mode の走行距離 (km)（往復なら片道 × 2） */
   km: number
@@ -46,7 +46,8 @@ export function roundTripMinutes(min: number): number {
  */
 export function tripEstimate(place: TripInput, mode: TripMode, speedKmh: number): TripEstimate {
   const routed = typeof place.routeKm === 'number' && place.routeKm > 0
-  const oneWayKm = routed ? place.routeKm! : roadKmEstimate(place.distanceKm)
+  // 表示は 0.1km 単位。往復は「丸めた片道 × 2」にして、片道 4.9km / 往復 9.7km のような食い違いを出さない
+  const oneWayKm = Math.round((routed ? place.routeKm! : roadKmEstimate(place.distanceKm)) * 10) / 10
   const round = mode === 'round'
   const km = round ? oneWayKm * 2 : oneWayKm
   const e = place.elevation ?? null

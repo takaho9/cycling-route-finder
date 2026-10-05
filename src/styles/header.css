@@ -74,6 +74,11 @@
   align-items: center;
   gap: 2px;
 }
+.streak-badge__label {
+  margin-left: 2px;
+  font-size: var(--fs-sub);
+  font-weight: 700;
+}
 .streak-badge .num {
   font-weight: 800;
   font-size: 18px;

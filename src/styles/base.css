@@ -7,6 +7,8 @@
 html {
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
+  /* 和文と数字の間に自動で空きを入れない（「全 31 件」のような余白, BACKLOG-2 D16） */
+  text-autospace: no-autospace;
 }
 
 body {

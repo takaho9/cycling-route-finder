@@ -5,8 +5,15 @@ import '@fontsource/outfit/latin-600.css'
 import '@fontsource/outfit/latin-800.css'
 import './styles/index.css'
 import App from './App'
+import { setUpdateReady } from './lib/swUpdate'
 
-registerSW({ immediate: true })
+// 更新は prompt 型（BACKLOG-2 C16）: 新しい SW が待機したら App に知らせ、ホーム表示中なら即時、それ以外はトーストで適用
+const updateSW = registerSW({
+  immediate: true,
+  onNeedRefresh() {
+    setUpdateReady(() => void updateSW(true))
+  },
+})
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

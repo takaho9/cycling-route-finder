@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useId, useRef } from 'react'
 import { ROUND_TRIP_MINUTES } from '../lib/reach'
 
 const W = 340
@@ -42,6 +42,7 @@ export function TimeDial({
   valueText: string
 }) {
   const ref = useRef<SVGSVGElement>(null)
+  const gradId = useId()
   const dragging = useRef(false)
   const minutes = ROUND_TRIP_MINUTES[index]
   const { value, unit } = formatDial(minutes)
@@ -101,14 +102,14 @@ export function TimeDial({
         aria-hidden="true"
       >
         <defs>
-          <linearGradient id="dial-grad" x1="0" y1="1" x2="1" y2="0">
+          <linearGradient id={gradId} x1="0" y1="1" x2="1" y2="0">
             <stop offset="0" className="dial__stop1" />
             <stop offset="0.5" className="dial__stop2" />
             <stop offset="1" className="dial__stop3" />
           </linearGradient>
         </defs>
         <path d={arc(DIAL_ANGLES[0], DIAL_ANGLES[DIAL_ANGLES.length - 1])} className="dial__track" />
-        {index > 0 && <path d={arc(DIAL_ANGLES[0], DIAL_ANGLES[index])} className="dial__progress" />}
+        {index > 0 && <path d={arc(DIAL_ANGLES[0], DIAL_ANGLES[index])} className="dial__progress" stroke={`url(#${gradId})`} />}
         {index === 0 && <circle cx={pt(DIAL_ANGLES[0])[0]} cy={pt(DIAL_ANGLES[0])[1]} r={10} className="dial__progress-dot" />}
         {DIAL_ANGLES.map((a, i) => {
           const [x, y] = pt(a)

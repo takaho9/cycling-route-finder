@@ -116,7 +116,7 @@ async function run() {
 
       // 04 詳細シート（フルに引き上げ）
       await page.evaluate(() => window.scrollTo({ top: 0 }))
-      await page.locator('.rec-card').first().getByRole('button', { name: 'くわしく' }).click()
+      await page.locator('.rec-card').first().locator('.rec-card__open').click()
       const grab = page.locator('.sheet__grab')
       await grab.waitFor()
       await wait(400)

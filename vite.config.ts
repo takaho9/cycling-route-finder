@@ -28,7 +28,8 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 更新は prompt 型: 新しい版はユーザーの操作（またはホーム表示中）で適用（BACKLOG-2 C16）
+      registerType: 'prompt',
       includeAssets: ['icons/favicon.svg', 'icons/apple-touch-icon-180.png'],
       manifest: {
         id: './',

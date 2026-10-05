@@ -34,6 +34,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.place-photo__credit > span + span::before {
+  content: ' · ';
+}
+.place-photo__nearby {
+  font-weight: 700;
+}
 .card .place-photo__credit,
 .rec-card .place-photo__credit {
   top: 52px;
@@ -46,15 +52,37 @@
   position: absolute;
   inset: 0;
   display: grid;
-  place-items: center;
+  justify-items: center;
+  align-items: start;
   overflow: hidden;
   container-type: size;
 }
+/* 絵文字は上寄せ: 下部に重ねる名称と重ならない（BACKLOG-2 D7） */
 .photo-fallback__emoji {
   position: relative;
-  font-size: 40cqh;
+  margin-top: 14cqh;
+  font-size: 34cqh;
   line-height: 1;
   filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.18));
+}
+/* 太陽（D17） */
+.photo-fallback__sun {
+  position: absolute;
+  top: 34cqh;
+  left: 10cqw;
+  width: 24cqh;
+  height: 24cqh;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.5) 0 55%, rgba(255, 255, 255, 0.18) 56% 100%);
+}
+/* 粒子ノイズ（D17） */
+.photo-fallback__grain {
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.22;
+  mix-blend-mode: soft-light;
+  pointer-events: none;
 }
 .photo-fallback__ghost {
   position: absolute;
@@ -72,7 +100,17 @@
   bottom: 0;
   width: 100%;
   height: 30%;
-  fill: rgba(255, 255, 255, 0.1);
+}
+.photo-fallback__road-fill {
+  fill: rgba(255, 255, 255, 0.12);
+}
+/* 道のセンターライン（D17） */
+.photo-fallback__road-line {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 2;
+  stroke-dasharray: 10 12;
+  vector-effect: non-scaling-stroke;
 }
 
 .card__overlay {
@@ -82,6 +120,8 @@
   pointer-events: none;
 }
 .cat-pill {
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   position: absolute;
   top: var(--sp-3);
   left: var(--sp-3);
@@ -187,12 +227,14 @@
   outline-offset: 2px;
 }
 .card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px var(--sp-2);
   margin-top: 2px;
-  font-size: var(--fs-sub);
-  font-weight: 500;
 }
-.card__meta .num {
-  font-weight: 600;
+.card__meta .visited-pill {
+  margin-left: 0;
 }
 .card__band {
   display: flex;
@@ -218,17 +260,18 @@
 .elev-badge .num {
   font-size: 14px;
 }
+/* 淡い背景＋濃い文字（BACKLOG-2 D11）。色だけに頼らず形とテキストでも区別 */
 .elev-badge--flat {
-  background: var(--c-flat);
-  color: var(--c-on-flat);
+  background: var(--c-flat-soft);
+  color: var(--c-flat-ink);
 }
 .elev-badge--rolling {
-  background: var(--c-rolling);
-  color: var(--c-on-rolling);
+  background: var(--c-rolling-soft);
+  color: var(--c-rolling-ink);
 }
 .elev-badge--hilly {
-  background: var(--c-hill);
-  color: var(--c-on-hill);
+  background: var(--c-hill-soft);
+  color: var(--c-hill-ink);
 }
 .elev-badge--loading,
 .elev-badge--none {
@@ -236,9 +279,8 @@
   color: var(--c-text-sub);
 }
 .elev-badge__est {
-  margin-left: 2px;
-  font-weight: 500;
-  opacity: 0.85;
+  margin-right: 1px;
+  font-weight: 600;
 }
 
 .mini-elev {
@@ -256,7 +298,7 @@
 }
 .mini-elev__area {
   fill: currentColor;
-  opacity: 0.15;
+  opacity: 0.12;
 }
 .mini-elev__line {
   fill: none;
@@ -289,6 +331,13 @@
   width: 100%;
   aspect-ratio: 16 / 10;
   text-align: left;
+}
+/* おすすめカードは名称が写真の下なので暗いオーバーレイは不要。ピルのために上部だけ薄く（D7） */
+.rec-card__shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.18) 0, rgba(0, 0, 0, 0) 38%);
+  pointer-events: none;
 }
 .rec-card__rank {
   position: absolute;
@@ -323,33 +372,121 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.rec-card__meta {
-  margin-top: -4px;
-  color: var(--c-text-sub);
-  font-size: var(--fs-sub);
-  font-weight: 500;
+.rec-card__open {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  font: inherit;
+  color: inherit;
 }
-.rec-card__meta .num {
-  color: var(--c-text);
-  font-weight: 600;
-}
-.rec-card__row {
+.rec-card__stats {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-2);
+  min-height: 40px;
 }
-.rec-card__more {
-  min-height: var(--tap);
-  padding: 0 var(--sp-2);
-  color: var(--c-accent-ink);
-  font-weight: 700;
-  font-size: var(--fs-sub);
+.rec-card__row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.rec-card__row .visited-pill {
+  margin-left: 0;
 }
 .rec-card__go {
   margin-top: auto;
   width: 100%;
 }
-.rec-card .demo-note {
-  margin-top: 0;
+
+/* 「⏱ 40分 · 片道5.4km」（BACKLOG-2 D2/D9）: 数字はヒーロー */
+.trip {
+  position: relative;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 6px;
+  font-size: var(--fs-sub);
+  font-weight: 600;
+  line-height: 1.2;
+}
+.trip__time,
+.trip__km {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 1px;
+  white-space: nowrap;
+}
+.trip__icon {
+  margin-right: 3px;
+  font-size: 0.95em;
+}
+.trip__big {
+  font-size: 20px;
+  font-weight: 800;
+}
+.trip__sep {
+  opacity: 0.6;
+}
+.trip--hero .trip__big {
+  font-size: 28px;
+}
+.trip--hero {
+  color: var(--c-text);
+}
+.trip--hero .trip__km {
+  color: var(--c-text-sub);
+}
+.trip--hero .trip__km .trip__big {
+  color: var(--c-text);
+}
+.trip--on-photo {
+  color: var(--c-white);
+}
+.trip .route-pill {
+  align-self: center;
+}
+
+/* 経路で更新（2 秒） */
+.route-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: var(--r-pill);
+  background: var(--c-accent-strong);
+  color: var(--c-on-accent);
+  font-size: 11px;
+  font-weight: 700;
+  text-shadow: none;
+  white-space: nowrap;
+  animation: pill-in var(--dur-base) var(--ease-spring);
+}
+@keyframes pill-in {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+}
+
+/* NEW リボン（ガチャ, D3） */
+.new-ribbon {
+  position: absolute;
+  top: 14px;
+  right: -34px;
+  z-index: 2;
+  width: 120px;
+  padding: 3px 0;
+  background: var(--c-gold);
+  color: #1a0e08;
+  box-shadow: var(--sh-2);
+  font-family: var(--font-num);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-align: center;
+  transform: rotate(45deg);
 }

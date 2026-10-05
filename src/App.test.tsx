@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import App from './App'
 import { clearPlacesCache } from './lib/places'
@@ -69,8 +69,9 @@ describe('App — home', () => {
     expect(screen.getByText('位置情報がオフみたい。出発地をえらぼう')).toBeTruthy()
     expect(screen.queryByText(/日没まで/)).toBeNull()
 
-    // 出発地が無いまま「候補を見る」→ 出発地シート
-    fireEvent.click(screen.getByRole('button', { name: /候補を見る/ }))
+    // 出発地が無いときの CTA は「出発地をえらぶ →」（D15）→ 出発地シート
+    expect(screen.queryByRole('button', { name: /候補を見る/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /出発地をえらぶ →/ }))
     expect(screen.getByRole('dialog', { name: '出発地をえらぶ' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }))
 
@@ -93,18 +94,29 @@ describe('App — home', () => {
 })
 
 describe('App — results', () => {
-  it('falls back to demo data when every provider fails, and shows the demo pill (R2)', async () => {
-    mockFetch(() => Promise.reject(new TypeError('Failed to fetch')))
+  it('falls back to demo data when every provider fails: demo pill once, retry, no direct departure from cards (R2/C6)', async () => {
+    const f = mockFetch(() => Promise.reject(new TypeError('Failed to fetch')))
     mockGeolocation(TOKYO)
     render(<App now={now} />)
     await openResults()
-    expect(screen.getAllByRole('button', { name: /デモデータ/ }).length).toBeGreaterThan(0)
-    expect(screen.getByText(/件の行き先が見つかった/).textContent).toMatch(/^\d+件/)
+    expect(screen.getAllByRole('button', { name: /デモデータ/ })).toHaveLength(1) // 件数行に 1 か所だけ（D9）
+    expect(screen.getByText(/件の行き先/).textContent).toMatch(/^\d+件の行き先$/)
+    // カードから直接は出発させない。詳細から（注意書き付きで）
+    const recs = screen.getByRole('region', { name: '今日のおすすめ' })
+    expect(within(recs).queryAllByRole('link', { name: /Googleマップで出発/ })).toHaveLength(0)
+    fireEvent.click(within(recs).getAllByRole('button', { name: /くわしく見る/ })[0])
+    const dialog = await screen.findByRole('dialog')
+    const u = new URL((within(dialog).getByRole('link', { name: /Googleマップで出発/ }) as HTMLAnchorElement).href)
     // GPS の出発地なら既定は往復（origin 省略・destination=出発地・waypoints=目的地）
-    const u = new URL((screen.getAllByRole('link', { name: /Googleマップで出発/ })[0] as HTMLAnchorElement).href)
     expect(u.searchParams.has('origin')).toBe(false)
     expect(u.searchParams.get('destination')).toBe('35.6812,139.7671')
     expect(u.searchParams.get('waypoints')).toMatch(/^\d+\.\d{6},\d+\.\d{6}$/)
+    expect(within(dialog).getByText(/デモの架空の場所/)).toBeTruthy()
+    fireEvent.click(within(dialog).getByRole('button', { name: '閉じる' }))
+    // 再試行ボタン
+    const before = f.mock.calls.length
+    fireEvent.click(screen.getByRole('button', { name: '実データでさがし直す' }))
+    await waitFor(() => expect(f.mock.calls.length).toBeGreaterThan(before))
   })
 
   it('recommends 3 places and lets you depart straight from a card (records the departure, R7)', async () => {
@@ -152,7 +164,9 @@ describe('App — results', () => {
     mockGeolocation(TOKYO)
     render(<App services={demoServices} now={now} />)
     await openResults()
-    fireEvent.click(screen.getAllByRole('button', { name: 'くわしく' })[0])
+    const recs = screen.getByRole('region', { name: '今日のおすすめ' })
+    const card = within(recs).getAllByRole('article')[0]
+    fireEvent.click(within(within(card).getByRole('heading')).getByRole('button'))
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByRole('link', { name: /Googleマップで出発/ })).toBeTruthy()
     const walk = within(dialog).getByRole('link', { name: '徒歩で開く' }) as HTMLAnchorElement
@@ -165,12 +179,12 @@ describe('App — results', () => {
     await openResults()
     const recs = screen.getByRole('region', { name: '今日のおすすめ' })
     const card = within(recs).getAllByRole('article')[0]
-    expect(card.querySelector('.elev-badge')?.textContent).toContain('推定')
-    fireEvent.click(within(card).getByRole('button', { name: 'くわしく' }))
+    expect(card.querySelector('.elev-badge')?.textContent).toContain('≈')
+    fireEvent.click(within(within(card).getByRole('heading')).getByRole('button'))
     const dialog = await screen.findByRole('dialog')
     await within(dialog).findByText(/最大勾配/)
     fireEvent.click(within(dialog).getByRole('button', { name: '閉じる' }))
-    expect(card.querySelector('.elev-badge')?.textContent).not.toContain('推定')
+    expect(card.querySelector('.elev-badge')?.textContent).not.toContain('≈')
   })
 })
 
@@ -204,7 +218,7 @@ describe('App — habits', () => {
     mockGeolocation(TOKYO)
     departure(60)
     render(<App services={demoServices} now={now} />)
-    fireEvent.click(screen.getByRole('button', { name: '✕ 行かなかった' }))
+    fireEvent.click(screen.getByRole('button', { name: '行かなかった' }))
     expect(screen.queryByText(/行ってきた？/)).toBeNull()
     expect(loadRides()).toEqual([])
     expect(loadDeparture()).toBeNull()

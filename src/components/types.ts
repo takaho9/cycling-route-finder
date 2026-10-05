@@ -8,6 +8,8 @@ export interface ViewPlace extends Place {
   /** 'loading' = 取得中, 'none' = 取得失敗 */
   elevationState: 'loading' | 'ready' | 'none'
   elevation?: ElevationSummary
+  /** 詳細で取れた経路（OSRM）の片道距離 (km)。あれば一覧の距離・時間もこれで計算（D2） */
+  routeKm?: number
   visited: boolean
   favorite: boolean
 }
@@ -21,4 +23,4 @@ export interface Origin extends LatLng {
   accuracyM?: number
 }
 
-export type RouteMode = 'oneway' | 'round'
+export type { TripMode as RouteMode } from '../lib/trip'

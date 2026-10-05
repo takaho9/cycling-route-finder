@@ -25,7 +25,6 @@
   stroke: var(--c-surface-2);
 }
 .dial__progress {
-  stroke: url(#dial-grad);
   transition: d var(--dur-base) var(--ease-out);
 }
 .dial__progress-dot {

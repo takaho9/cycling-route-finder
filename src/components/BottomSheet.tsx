@@ -1,5 +1,33 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { CloseIcon } from './Icons'
+
+/**
+ * 背景のスクロールを止める（BACKLOG-2 C19）。iOS Safari は body の overflow:hidden を無視するので、
+ * body を position:fixed にして今のスクロール位置で固定し、解除時に元の位置へ戻す。シートが重なっても 1 回だけ。
+ */
+let lockCount = 0
+let savedScrollY = 0
+let savedStyle: Partial<CSSStyleDeclaration> = {}
+export function lockBodyScroll(): () => void {
+  const body = document.body
+  if (lockCount++ === 0) {
+    savedScrollY = window.scrollY || 0
+    savedStyle = { position: body.style.position, top: body.style.top, left: body.style.left, right: body.style.right, width: body.style.width }
+    body.style.position = 'fixed'
+    body.style.top = `-${savedScrollY}px`
+    body.style.left = '0'
+    body.style.right = '0'
+    body.style.width = '100%'
+  }
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    if (--lockCount > 0) return
+    Object.assign(body.style, savedStyle)
+    window.scrollTo?.(0, savedScrollY)
+  }
+}
 
 /**
  * ボトムシート（DESIGN §3.3）。スナップ 2 段（half 60% / full 95%）、下スワイプで閉じる。
@@ -34,6 +62,7 @@ export function BottomSheet({
   const restore = useRef<Element | null>(null)
   const closeRef = useRef(onClose)
   closeRef.current = onClose
+  const titleId = useId()
 
   useEffect(() => {
     if (!open) return
@@ -42,12 +71,11 @@ export function BottomSheet({
     const t = setTimeout(() => headingRef.current?.focus(), 30)
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && closeRef.current()
     document.addEventListener('keydown', onKey)
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    const unlock = lockBodyScroll()
     return () => {
       clearTimeout(t)
       document.removeEventListener('keydown', onKey)
-      document.body.style.overflow = prevOverflow
+      unlock()
       ;(restore.current as HTMLElement | null)?.focus?.()
     }
   }, [open, snap])
@@ -80,7 +108,7 @@ export function BottomSheet({
         className={`sheet sheet--${level} ${className}`}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="sheet-title"
+        aria-labelledby={titleId}
         style={drag ? { transform: `translateY(${Math.max(-40, drag)}px)`, transition: 'none' } : undefined}
       >
         <div
@@ -106,7 +134,7 @@ export function BottomSheet({
         </button>
         <div className="sheet__body">
           {hero}
-          <h2 id="sheet-title" ref={headingRef} tabIndex={-1} className={titleHidden ? 'visually-hidden' : 'sheet__title'}>
+          <h2 id={titleId} ref={headingRef} tabIndex={-1} className={titleHidden ? 'visually-hidden' : 'sheet__title'}>
             {title}
           </h2>
           {children}

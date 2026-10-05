@@ -28,6 +28,8 @@
 }
 
 .stats {
+  position: relative;
+  margin-top: var(--sp-3);
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   border-radius: var(--r-md);
@@ -65,16 +67,34 @@
   font-size: var(--fs-caption);
   font-weight: 500;
 }
+/* 「片道 +11m · フラット」（D2） */
+.stats__sub {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 100%;
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.stats > .route-pill {
+  position: absolute;
+  top: -11px;
+  right: var(--sp-3);
+  z-index: 1;
+}
 .stats__cell--flat .stats__num,
-.stats__cell--flat .stats__label {
+.stats__cell--flat .stats__sub {
   color: var(--c-flat-ink);
 }
 .stats__cell--rolling .stats__num,
-.stats__cell--rolling .stats__label {
+.stats__cell--rolling .stats__sub {
   color: var(--c-rolling-ink);
 }
 .stats__cell--hilly .stats__num,
-.stats__cell--hilly .stats__label {
+.stats__cell--hilly .stats__sub {
   color: var(--c-hill-ink);
 }
 .detail__note {
@@ -99,8 +119,25 @@
   margin-bottom: var(--sp-2);
 }
 .detail__section-head h3 {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-2);
   font-size: var(--fs-body);
   font-weight: 700;
+}
+/* ラベル（のんびり平坦 等）は見出しの横（D6） */
+.detail__elev-label {
+  font-size: var(--fs-sub);
+  font-weight: 700;
+}
+.detail__elev-label--flat {
+  color: var(--c-flat-ink);
+}
+.detail__elev-label--rolling {
+  color: var(--c-rolling-ink);
+}
+.detail__elev-label--hilly {
+  color: var(--c-hill-ink);
 }
 .detail__section-head .num {
   color: var(--c-text-sub);
@@ -118,13 +155,19 @@
 }
 .detail__rode {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   align-items: center;
-  gap: var(--sp-2);
+  gap: var(--sp-1);
   margin-top: var(--sp-5);
 }
-.detail__rode .btn--outline {
-  flex: 1 1 auto;
+/* 「走った！」は全幅、「昨日の分として記録」はテキストリンク（D14） */
+.detail__yesterday {
+  min-height: 40px;
+  color: var(--c-accent-ink);
+  font-size: var(--fs-sub);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .detail__go {
   width: 100%;
@@ -148,19 +191,20 @@
   text-align: right;
 }
 
-/* 片道/往復 セグメント */
+/* 片道/往復 セグメント: 店名の下・スタッツの上、高さ 40px（D6） */
 .segment {
   display: flex;
-  gap: 4px;
-  margin-top: var(--sp-5);
-  padding: 4px;
-  border-radius: var(--r-md);
+  gap: 3px;
+  height: 40px;
+  padding: 3px;
+  border-radius: 12px;
   background: var(--c-surface-2);
 }
 .segment__btn {
   flex: 1;
-  min-height: var(--tap);
-  border-radius: 12px;
+  min-height: 34px;
+  border-radius: 9px;
+  font-size: var(--fs-sub);
   color: var(--c-text-sub);
   font-weight: 700;
   transition: background-color var(--dur-base) var(--ease-out);
@@ -200,6 +244,30 @@
   color: var(--c-text-sub);
   font-size: var(--fs-caption);
 }
+.elev-profile__plot {
+  position: relative;
+}
+.elev-profile__relief {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  padding: 1px 8px;
+  border-radius: var(--r-pill);
+  background: var(--c-surface);
+  color: var(--c-text-sub);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  pointer-events: none;
+}
+.elev-profile__relief .num {
+  color: var(--c-text);
+  font-weight: 800;
+}
+.elev-profile__guide {
+  stroke: var(--c-border);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+}
 .elev-profile__svg {
   display: block;
   width: 100%;
@@ -238,7 +306,12 @@
   white-space: nowrap;
   pointer-events: none;
 }
+.elev-profile__turn-label {
+  position: absolute;
+  transform: translateX(-50%);
+}
 .elev-profile__x {
+  position: relative;
   display: flex;
   justify-content: space-between;
   margin-top: 4px;

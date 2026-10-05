@@ -5,8 +5,36 @@
   align-items: center;
   gap: var(--sp-2);
   max-width: 560px;
+  min-height: calc(100dvh - var(--header-h));
   margin: 0 auto;
-  padding: var(--sp-2) var(--sp-4) calc(140px + var(--safe-bottom));
+  padding: var(--sp-2) var(--sp-4) calc(104px + var(--safe-bottom));
+}
+/* ダイヤルは CTA の直上に寄せる（D8） */
+.home__dial {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  margin-top: auto;
+}
+.home__reach-art {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-1);
+}
+.home__count {
+  color: var(--c-text-sub);
+  font-size: var(--fs-sub);
+  font-weight: 500;
+}
+.home__count .num {
+  color: var(--c-text);
+  font-size: 18px;
+  font-weight: 800;
+}
+.home__count-demo {
+  font-size: var(--fs-caption);
 }
 .home > .return-card,
 .home > .notice-card {
@@ -35,15 +63,20 @@
   font-size: var(--fs-sub);
 }
 .home__reach {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0 var(--sp-1);
   color: var(--c-text-sub);
   font-size: var(--fs-sub);
   font-weight: 500;
 }
 .home__reach strong {
+  margin-left: 2px;
   color: var(--c-text);
   font-size: 24px;
   font-weight: 800;
-  margin: 0 2px;
 }
 
 /* 現在地ピル */
@@ -146,19 +179,19 @@
   flex: 1 1 auto;
 }
 
-/* 到達レンジの同心円 */
+/* 到達レンジの同心円（240px, scale 0.55〜1.0, D8） */
 .reach {
   position: relative;
   display: grid;
   place-items: center;
-  width: 180px;
-  height: 150px;
-  margin-top: var(--sp-1);
+  width: 240px;
+  height: 240px;
+  margin: calc(var(--sp-2) * -1) 0;
 }
 .reach__rings {
   position: absolute;
-  width: 150px;
-  height: 150px;
+  width: 240px;
+  height: 240px;
   transition: transform var(--dur-slow) var(--ease-spring);
 }
 .reach__ring {
@@ -178,27 +211,20 @@
   inset: 34%;
   opacity: 0.18;
 }
+/* 実際の候補カテゴリ。親の scale を打ち消して常に 22px（D8） */
 .reach__dot {
   position: absolute;
-  font-size: 18px;
+  font-size: 22px;
   line-height: 1;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) scale(var(--inv, 1));
+  transition: transform var(--dur-slow) var(--ease-spring);
+  animation: dot-pop var(--dur-slow) var(--ease-spring) var(--d, 0ms) both;
 }
-.reach__dot--a {
-  left: 14%;
-  top: 22%;
-}
-.reach__dot--b {
-  left: 86%;
-  top: 30%;
-}
-.reach__dot--c {
-  left: 22%;
-  top: 84%;
-}
-.reach__dot--d {
-  left: 80%;
-  top: 80%;
+@keyframes dot-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0);
+  }
 }
 .reach__bike {
   position: relative;
@@ -217,7 +243,7 @@
   align-items: center;
   gap: var(--sp-1);
   min-height: var(--tap);
-  padding: 0 var(--sp-3);
+  padding: 0 var(--sp-2);
   border-radius: var(--r-pill);
   color: var(--c-text-sub);
   font-size: var(--fs-sub);

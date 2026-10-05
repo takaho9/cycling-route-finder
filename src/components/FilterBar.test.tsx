@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { FilterBar } from './FilterBar'
+import { FilterBar, SortSelect } from './FilterBar'
 
 describe('FilterBar', () => {
   const setup = () => {
@@ -10,8 +10,6 @@ describe('FilterBar', () => {
       categories: new Set(['cafe' as const]),
       available: ['park', 'cafe', 'shrine'] as const,
       onToggleCategory: vi.fn(),
-      sort: 'near' as const,
-      onSort: vi.fn(),
     }
     render(<FilterBar {...props} available={[...props.available]} />)
     return props
@@ -37,8 +35,16 @@ describe('FilterBar', () => {
     expect(p.onToggleCategory).toHaveBeenCalledWith('park')
   })
 
+  it('D13: one row; a category chip shows its label only while selected', () => {
+    setup()
+    expect(document.querySelectorAll('.filters__row')).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'カフェ' }).textContent).toContain('カフェ')
+    expect(screen.getByRole('button', { name: '公園・緑地' }).textContent).toBe('🌳')
+  })
+
   it('sort select offers the five orders', () => {
-    const p = setup()
+    const p = { onSort: vi.fn() }
+    render(<SortSelect sort="near" onSort={p.onSort} />)
     const select = screen.getByRole('combobox', { name: '並び替え' }) as HTMLSelectElement
     expect([...select.options].map((o) => o.textContent)).toEqual(['近い順', '遠い順', '平坦順', 'ランダム', '行ったことない順'])
     fireEvent.change(select, { target: { value: 'unvisited' } })

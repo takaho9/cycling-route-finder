@@ -137,6 +137,21 @@
   padding: 0 var(--sp-4);
   pointer-events: none;
 }
+.toast--action {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding-right: var(--sp-2);
+  pointer-events: auto;
+}
+.toast__action {
+  min-height: 36px;
+  padding: 0 var(--sp-3);
+  border-radius: var(--r-pill);
+  background: var(--c-primary);
+  color: var(--c-on-primary);
+  font-weight: 700;
+}
 .toast {
   max-width: 480px;
   padding: var(--sp-3) var(--sp-5);
@@ -156,42 +171,49 @@
   }
 }
 
-/* 「行ってきた？」カード（R7） */
+/* 「行ってきた？」帯（R7 / BACKLOG-2 D10: 高さ 64px の 1 行） */
 .return-card {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: var(--sp-3) var(--sp-3);
-  padding: var(--sp-4);
-  border-radius: var(--r-lg);
+  gap: var(--sp-2);
+  height: 64px;
+  padding: 0 var(--sp-2) 0 var(--sp-3);
+  border-radius: var(--r-md);
   background: var(--c-surface);
-  box-shadow: inset 0 0 0 2px var(--c-gold), var(--sh-2);
+  box-shadow: inset 0 0 0 2px var(--c-gold), var(--sh-1);
   animation: card-in var(--dur-slow) var(--ease-out) both;
 }
 .return-card__emoji {
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background: var(--c-gold-soft);
-  font-size: 26px;
+  font-size: 20px;
 }
 .return-card__title {
-  font-size: 18px;
-  line-height: 1.4;
-  font-weight: 700;
-}
-.return-card__sub {
-  color: var(--c-text-sub);
+  overflow: hidden;
   font-size: var(--fs-sub);
-}
-.return-card__actions {
-  grid-column: 1 / -1;
-  display: flex;
-  gap: var(--sp-2);
+  line-height: 1.35;
+  font-weight: 700;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 .return-card__yes {
-  flex: 1 1 auto;
-  min-height: 48px;
+  min-height: 40px;
+  padding: 0 var(--sp-3);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-sub);
+  white-space: nowrap;
+}
+.return-card__no {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  color: var(--c-text-sub);
+  font-size: 16px;
 }

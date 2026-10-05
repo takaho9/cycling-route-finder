@@ -1,10 +1,13 @@
-import type { ReactNode } from 'react'
-import type { ElevationFilter, SortKey } from '../lib/candidates'
-import type { Category } from '../lib/types'
+import { useId, type ReactNode } from 'react'
+import type { ObserveRef } from '../hooks/useEnrichment'
 import type { SearchStatus } from '../hooks/usePlaceSearch'
+import { useScrollDirection } from '../hooks/useScrollDirection'
+import type { ElevationFilter, SortKey } from '../lib/candidates'
+import type { TripEstimate } from '../lib/trip'
+import type { Category } from '../lib/types'
 import { DemoPill } from './Banners'
-import { FilterBar } from './FilterBar'
-import { PlaceCard, type CardMetrics } from './PlaceCard'
+import { FilterBar, SortSelect } from './FilterBar'
+import { PlaceCard } from './PlaceCard'
 import { RecommendCard } from './RecommendCard'
 import { EmptyState, LoadingBar, SkeletonCard } from './States'
 import type { ViewPlace } from './types'
@@ -29,7 +32,8 @@ export function ResultsView({
   available,
   isDemo,
   demoReason,
-  metricsOf,
+  fallback,
+  tripOf,
   goHrefOf,
   goLabel,
   onGo,
@@ -40,6 +44,7 @@ export function ResultsView({
   onAddTime,
   canAddTime,
   onChangeOrigin,
+  onGacha,
 }: {
   top?: ReactNode
   status: SearchStatus
@@ -53,20 +58,27 @@ export function ResultsView({
   available: readonly Category[]
   isDemo: boolean
   demoReason?: string | null
-  metricsOf: (p: ViewPlace) => CardMetrics
+  /** 実 API が失敗してデモに落ちている（?demo=1 ではない）。再試行ボタンを出し、カードから直接出発させない（C6） */
+  fallback: boolean
+  tripOf: (p: ViewPlace) => TripEstimate
   goHrefOf: (p: ViewPlace) => string
   goLabel: string
   onGo: (p: ViewPlace) => void
   onOpen: (p: ViewPlace) => void
   onToggleFavorite: (p: ViewPlace) => void
-  observe: (el: HTMLElement | null) => void
+  observe: ObserveRef
   onRetry: () => void
   onAddTime: () => void
   canAddTime: boolean
   onChangeOrigin: () => void
+  onGacha: () => void
 }) {
+  const recsTitle = useId()
+  const moreTitle = useId()
   const filtered = filter.elevation !== 'all' || filter.categories.size > 0
   const reset = () => onFilter({ ...filter, elevation: 'all', categories: new Set() })
+  const scrollingDown = useScrollDirection(showAll)
+  const hasList = status !== 'idle' && status !== 'loading' && status !== 'error' && total > 0
 
   let body: ReactNode
   if (status === 'idle' || status === 'loading') {
@@ -104,15 +116,20 @@ export function ResultsView({
   } else {
     body = (
       <>
-        <p className="count-line">
-          <span>
-            <strong className="num">{total}</strong>件の行き先が見つかった
-          </span>
+        <div className="count-line">
+          <p>
+            <strong className="num">{total}</strong>件の行き先
+          </p>
           {isDemo && <DemoPill reason={demoReason} />}
-        </p>
-        <section className="recs" aria-labelledby="recs-title">
+          {fallback && (
+            <button type="button" className="btn btn--text count-line__retry" onClick={onRetry}>
+              実データでさがし直す
+            </button>
+          )}
+        </div>
+        <section className="recs" aria-labelledby={recsTitle}>
           <div className="section-head">
-            <h2 id="recs-title" className="section-head__title">
+            <h2 id={recsTitle} className="section-head__title">
               今日のおすすめ
             </h2>
             <p className="section-head__sub">日替わり · まだ行ってない場所を優先</p>
@@ -123,10 +140,10 @@ export function ResultsView({
                 key={p.id}
                 place={p}
                 rank={i + 1}
-                metrics={metricsOf(p)}
+                trip={tripOf(p)}
                 goHref={goHrefOf(p)}
                 goLabel={goLabel}
-                demo={p.source === 'mock'}
+                canDepart={!fallback}
                 onGo={onGo}
                 onOpen={onOpen}
                 observe={observe}
@@ -135,14 +152,16 @@ export function ResultsView({
           </div>
         </section>
 
-        <section className="more" aria-labelledby="more-title">
+        <section className="more" aria-labelledby={showAll ? moreTitle : undefined}>
           {!showAll ? (
             <button type="button" className="more__open btn btn--secondary btn--block pressable" onClick={onShowAll}>
-              もっと見る（全<span className="num">{total}</span>件）
+              <span>
+                もっと見る（<span className="num">{total}</span>件）
+              </span>
             </button>
           ) : (
             <>
-              <h2 id="more-title" className="section-head__title more__title">
+              <h2 id={moreTitle} className="section-head__title more__title">
                 ぜんぶの行き先
               </h2>
               <FilterBar
@@ -156,19 +175,18 @@ export function ResultsView({
                   else next.add(c)
                   onFilter({ ...filter, categories: next })
                 }}
-                sort={filter.sort}
-                onSort={(sort) => onFilter({ ...filter, sort })}
               />
-              <p className="count-line count-line--list" aria-live="polite">
-                <span>
-                  <strong className="num">{list.length}</strong>件{filtered ? `（全${total}件中）` : ''}
-                </span>
+              <div className="count-line count-line--list">
+                <p aria-live="polite">
+                  <strong className="num">{list.length}</strong>件{filtered && <span className="count-line__of">（{total}件中）</span>}
+                </p>
                 {filtered && (
                   <button type="button" className="btn btn--text count-line__reset" onClick={reset}>
                     リセット
                   </button>
                 )}
-              </p>
+                <SortSelect sort={filter.sort} onSort={(sort) => onFilter({ ...filter, sort })} />
+              </div>
               {list.length === 0 ? (
                 <EmptyState>
                   <button type="button" className="btn btn--primary pressable" onClick={reset}>
@@ -181,13 +199,13 @@ export function ResultsView({
                   )}
                 </EmptyState>
               ) : (
-                <div className="card-grid">
+                <div className="card-grid card-grid--list">
                   {list.map((p, i) => (
                     <PlaceCard
                       key={p.id}
                       place={p}
                       index={i}
-                      metrics={metricsOf(p)}
+                      trip={tripOf(p)}
                       onOpen={onOpen}
                       onToggleFavorite={onToggleFavorite}
                       observe={observe}
@@ -206,6 +224,18 @@ export function ResultsView({
     <main className="results" id="main">
       {top}
       {body}
+      {/* FAB: おすすめだけ表示中は出さない。一覧では下スクロールで隠し、上スクロールで出す（D4） */}
+      {hasList && showAll && (
+        <button
+          type="button"
+          className={`fab pressable${scrollingDown ? ' is-hidden' : ''}`}
+          onClick={onGacha}
+          aria-label="おまかせ（ガチャ）"
+          tabIndex={scrollingDown ? -1 : 0}
+        >
+          <span aria-hidden="true">🎲</span>
+        </button>
+      )}
     </main>
   )
 }

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Category } from '../lib/types'
 import {
   addRide,
@@ -37,7 +37,10 @@ export type RideOutcome =
 /** 走行記録・ストリーク・スタンプ・お気に入り・出発記録（DESIGN §3.5, BACKLOG R7/A7） */
 const systemNow = () => new Date()
 
-export function useHabits(weeklyGoal: number, now: () => Date = systemNow) {
+/**
+ * clock: 操作した瞬間の時刻（記録・出発）。nowDate: 表示用の「いま」（useNow で再評価される, BACKLOG-2 C4）。
+ */
+export function useHabits(weeklyGoal: number, now: () => Date = systemNow, nowDate: Date = now()) {
   const [rides, setRides] = useState<RideRecord[]>(() => loadRides())
   const [favorites, setFavorites] = useState<FavoritePlace[]>(() => loadFavorites())
   const [departure, setDeparture] = useState<Departure | null>(() => {
@@ -49,8 +52,16 @@ export function useHabits(weeklyGoal: number, now: () => Date = systemNow) {
     return d
   })
 
-  const todayKey = rideDateKey(now())
-  const today = rideToday(now())
+  // 出発記録の期限切れ（12 時間）は、アプリを開きっぱなしでも「いま」が進んだら消す（C4）
+  useEffect(() => {
+    if (departure && isDepartureExpired(departure, nowDate)) {
+      clearDeparture()
+      setDeparture(null)
+    }
+  }, [departure, nowDate])
+
+  const todayKey = rideDateKey(nowDate)
+  const today = rideToday(nowDate)
   const streak = computeStreak(rides, today)
   const best = computeBestStreak(rides)
   const weekCount = countThisWeek(rides, today)

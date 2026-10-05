@@ -53,6 +53,7 @@ describe('tripEstimate (D2: one function for card / gacha / detail / departure)'
     const t = tripEstimate({ distanceKm: 1 }, 'round', 12)
     expect(t.gainM).toBeNull()
     expect(t.rawMinutes).toBeCloseTo((2.6 / 12) * 60, 6)
+    expect(tripEstimate({ distanceKm: 3.74 }, 'round', 16)).toMatchObject({ oneWayKm: 4.9, km: 9.8 })
     expect(t.minutes).toBe(13) // 15 分未満は 1 分単位
   })
 })

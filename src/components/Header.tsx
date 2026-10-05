@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { ChevronLeft, GearIcon } from './Icons'
 
-/** ストリークバッジ（0 日なら 🚲 のみ） */
+/** ストリークバッジ（0 日なら 🚲＋「きろく」ラベル, BACKLOG-2 D20） */
 export function StreakBadge({ streak, onClick, bump }: { streak: number; onClick: () => void; bump?: number }) {
   return (
     <button
@@ -17,7 +17,12 @@ export function StreakBadge({ streak, onClick, bump }: { streak: number; onClick
             <span className="num">{streak}</span>
           </>
         ) : (
-          <span aria-hidden="true">🚲</span>
+          <>
+            <span aria-hidden="true">🚲</span>
+            <span className="streak-badge__label" aria-hidden="true">
+              きろく
+            </span>
+          </>
         )}
       </span>
     </button>
