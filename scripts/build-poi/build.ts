@@ -5,6 +5,7 @@ import { mainlandRings, ringsBbox, type GeomWay } from './boundary'
 import { appealScore, dedupePois, mergeSources, osmToDrafts, type PoiDraft } from './merge'
 import { buildIndex, buildTiles } from './output'
 import { attachPhotos, type PhotoSource } from './photos'
+import { applyQualityRules, qualityPenalty } from './quality'
 
 /** 写真ファイルのうち、これ未満しかサムネに解決できなければ警告 */
 export const PHOTO_MIN_RESOLVE_RATIO = 0.5
@@ -69,7 +70,16 @@ export async function buildDataset(input: BuildInput): Promise<BuildOutput> {
   }
   let pois = coverage ? merged.filter((p) => inCoverage({ coverage: coverage! }, p)) : merged
   if (pois.length !== merged.length) log(`coverage: dropped ${merged.length - pois.length} outside the mainland polygon`)
-  for (const d of pois) d.score = appealScore(d)
+  // 品質ルール（v1.3.2）: チェーン・寺社の付属建物・境内の吸収
+  const q = applyQualityRules(pois)
+  pois = q.pois
+  log(
+    `quality: chain by name ${q.stats.chainByName}, auto chain ${q.stats.chainAuto} (${q.stats.autoChainNames.length} names), ` +
+      `worship parts ${q.stats.worshipPart}, absorbed ${q.stats.absorbed}, minor worship (demoted) ${q.stats.minorWorship}`,
+  )
+  if (q.stats.autoChainNames.length) log(`quality: auto chains: ${q.stats.autoChainNames.slice(0, 40).join(', ')}`)
+  const score = (d: PoiDraft) => Math.round((appealScore(d) - qualityPenalty(d)) * 10) / 10
+  for (const d of pois) d.score = score(d)
   pois = dedupePois(pois)
   log(`dedupe: ${pois.length} places`)
   const warnings = [...(input.warnings ?? [])]
@@ -92,7 +102,7 @@ export async function buildDataset(input: BuildInput): Promise<BuildOutput> {
       photoStats.warn_commons_nearby_errors = ps.nearbyErrors
       warnings.push(`Commons 近傍検索の失敗: ${ps.nearbyErrors} 件${ps.nearbyAborted ? '（連続失敗で打ち切り）' : ''}`)
     }
-    for (const d of pois) d.score = appealScore(d)
+    for (const d of pois) d.score = score(d)
   }
   coverage ??= cellsCoverage(pois)
   const tiles = buildTiles(pois)
@@ -115,6 +125,11 @@ export async function buildDataset(input: BuildInput): Promise<BuildOutput> {
       wikidataOnly: stats.wikidataOnly,
       withPhoto: pois.filter((d) => d.photo).length,
       ...photoStats,
+      q_chain_name: q.stats.chainByName,
+      q_chain_auto: q.stats.chainAuto,
+      q_worship_part: q.stats.worshipPart,
+      q_absorbed: q.stats.absorbed,
+      q_minor_worship: q.stats.minorWorship,
       ...(input.warnStats ?? {}),
       ...byCat,
       ...(warnings.length ? { warn_count: warnings.length } : {}),

@@ -93,8 +93,8 @@ describe('GeoJSON Seq (osmium export) → Overpass-shaped elements', () => {
     })
     const names = pois.map((p) => p.name).sort()
     expect(names).toEqual(['KITTEガーデン', '喫茶テスト', '大きな神社', '日枝神社', '日比谷公園', '東京国立博物館', '浜離宮恩賜庭園'].sort())
-    // 小さな公園（isWorthVisiting）・川崎（境界の外）は落ちる
-    expect(pois.find((p) => p.name === '浜離宮恩賜庭園')).toMatchObject({ category: 'seaside', tags: { size_m: expect.any(String) } })
+    // 小さな公園（isWorthVisiting）・川崎（境界の外）は落ちる。浜離宮は「浜」だけでは海辺にしない（v1.3.2）
+    expect(pois.find((p) => p.name === '浜離宮恩賜庭園')).toMatchObject({ category: 'park', tags: { size_m: expect.any(String) } })
   })
 })
 

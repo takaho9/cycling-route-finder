@@ -24,13 +24,19 @@ export interface PoiDraft {
   p18?: string
   photo?: EmbeddedPhoto
   score?: number
+  /** way/relation の範囲（osmium 経路のみ。境内の node の吸収に使う） */
+  extent?: { minlat: number; minlon: number; maxlat: number; maxlon: number }
 }
 
 /** OSM 要素 → 下書き（島しょ部を除外） */
 export function osmToDrafts(elements: readonly OverpassElement[]): PoiDraft[] {
+  const extents = new Map(elements.filter((e) => e.extent).map((e) => [`osm:${e.type}/${e.id}`, e.extent!]))
   return parseOverpassElements(elements, TOKYO_STATION)
     .filter((p) => p.lat >= MAINLAND_MIN_LAT)
-    .map((p) => ({ id: p.id, name: p.name, lat: p.lat, lng: p.lng, category: p.category, tags: { ...(p.tags ?? {}) } }))
+    .map((p) => {
+      const extent = extents.get(p.id)
+      return { id: p.id, name: p.name, lat: p.lat, lng: p.lng, category: p.category, tags: { ...(p.tags ?? {}) }, ...(extent ? { extent } : {}) }
+    })
 }
 
 const PAREN_RE = /[（(［[][^）)］\]]*[）)］\]]/g

@@ -81,6 +81,20 @@ describe('fetchCommonsImageInfo (response handling)', () => {
     expect(m.get('File:Foo bar.jpg')?.url).toContain('500px-Foo_bar.jpg')
   })
 
+  it('follows file redirects (renamed files) back to the requested name', async () => {
+    const f = mockFetch(() =>
+      jsonResponse({
+        query: {
+          redirects: [{ from: 'File:Old name.jpg', to: 'File:New name.jpg' }],
+          pages: { 1: page('File:New name.jpg', { thumburl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/n/nn/New_name.jpg/500px-New_name.jpg', url: 'x', width: 3000 }) },
+        },
+      }),
+    )
+    const m = await fetchCommonsImageInfo(['File:Old_name.jpg'], 500)
+    expect(String(f.mock.calls[0][0])).toContain('redirects=1')
+    expect(m.get('File:Old_name.jpg')?.url).toContain('500px-New_name.jpg')
+  })
+
   it('follows "continue" when imageinfo is split over several responses', async () => {
     const f = mockFetch((url) =>
       url.includes('iicontinue')

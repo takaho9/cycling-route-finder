@@ -251,6 +251,8 @@ function toPhotoInfo(page: ImageInfoPage | undefined, width: number): PhotoInfo 
 }
 
 const IMAGEINFO_PARAMS = 'prop=imageinfo&iiprop=url|size|extmetadata&iiextmetadatafilter=Artist|LicenseShortName&format=json&origin=*'
+/** ファイル名の一括解決ではリダイレクト（改名されたファイル）もたどる */
+const REDIRECTS_PARAM = '&redirects=1'
 
 /**
  * ファイル名の照合キー（v1.3.2）: "File:"/"Image:"/"ファイル:" 接頭辞、%xx、_ と空白、Unicode 正規化（NFC）、先頭の大文字化をそろえる。
@@ -315,18 +317,25 @@ export async function fetchCommonsImageInfo(
   }
   const out = new Map<string, PhotoInfo | null>()
   for (const chunk of chunkTitles([...byKey.keys()])) {
-    const base = `${COMMONS_API}?action=query&titles=${encodeURIComponent(chunk.join('|'))}&${IMAGEINFO_PARAMS}&iiurlwidth=${width}`
+    const base = `${COMMONS_API}?action=query&titles=${encodeURIComponent(chunk.join('|'))}&${IMAGEINFO_PARAMS}${REDIRECTS_PARAM}&iiurlwidth=${width}`
     let cont: Record<string, string> | undefined
     try {
       for (let n = 0; n < MAX_CONTINUE; n++) {
         const url = cont ? `${base}&${new URLSearchParams(cont).toString()}` : base
         const json = await fetchJson<ImageInfoResponse>(url, undefined, { timeoutMs: 8_000, ...opts })
+        // 正規化・リダイレクト（改名）の先 → 元の呼び名
+        const aliases = new Map<string, string[]>()
+        for (const r of [...(json.query?.normalized ?? []), ...(json.query?.redirects ?? [])]) {
+          const to = fileTitleKey(r.to)
+          aliases.set(to, [...(aliases.get(to) ?? []), fileTitleKey(r.from), ...(aliases.get(fileTitleKey(r.from)) ?? [])])
+        }
         for (const page of Object.values(json.query?.pages ?? {})) {
           if (!page.title) continue
           const key = fileTitleKey(page.title)
+          const keys = [key, ...(aliases.get(key) ?? [])]
           const info = page.missing !== undefined || page.invalid !== undefined ? null : page.imageinfo?.length ? toPhotoInfo(page, width) : undefined
           if (info === undefined) continue // imageinfo が来ていない（continue の続きで来るかもしれない）
-          for (const original of byKey.get(key) ?? []) if (!out.has(original) || out.get(original) === null) out.set(original, info)
+          for (const k of keys) for (const original of byKey.get(k) ?? []) if (!out.has(original) || out.get(original) === null) out.set(original, info)
         }
         cont = json.continue
         if (!cont) break

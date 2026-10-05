@@ -143,9 +143,10 @@ export function featureToElement(feature: Feature): OverpassElement | null {
   if (!Number.isFinite(minlat)) return null
   if (type === 'node') return { type, id, lat: minlat, lon: minlon, tags }
   const r7 = (v: number) => Math.round(v * 1e7) / 1e7
-  // Overpass と同じ: 公園は bbox（規模判定用）、それ以外は中心点（bbox の中心）
-  if (park) return { type, id, bounds: { minlat, minlon, maxlat, maxlon }, tags }
-  return { type, id, center: { lat: r7((minlat + maxlat) / 2), lon: r7((minlon + maxlon) / 2) }, tags }
+  const extent = { minlat, minlon, maxlat, maxlon }
+  // Overpass と同じ: 公園は bbox（規模判定用）、それ以外は中心点（bbox の中心）。extent は境内判定用（v1.3.2）
+  if (park) return { type, id, bounds: { minlat, minlon, maxlat, maxlon }, tags, extent }
+  return { type, id, center: { lat: r7((minlat + maxlat) / 2), lon: r7((minlon + maxlon) / 2) }, tags, extent }
 }
 
 /**

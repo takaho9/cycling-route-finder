@@ -1,6 +1,7 @@
 import { bearingDeg, haversineKm } from '../geo'
 import { abortError, fetchJson, isAbortError, TimeoutError } from '../http'
 import type { Category, LatLng, Place, PlaceProvider } from '../types'
+import { isChainName, isWorshipPartName } from './quality'
 
 export const OVERPASS_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
@@ -21,7 +22,8 @@ export const MIN_PARK_BBOX_DIAGONAL_M = 400
 /** 名前から小規模と判断する公園 */
 export const SMALL_PARK_NAME_RE = /児童遊園|ちびっこ|児童公園|ポケットパーク|遊び場|プチテラス/
 const WATERSIDE_NAME_RE = /河川敷|親水|水辺|湖畔|川沿い/
-const SEASIDE_NAME_RE = /海浜|海岸|ビーチ|臨海|浜/
+/** 海辺の公園（v1.3.2: 「浜」単独は広すぎる＝浜離宮・浜町公園を誤分類したので、海浜・海岸・ビーチ・臨海などに限定） */
+export const SEASIDE_NAME_RE = /海浜|海岸|ビーチ|臨海|海辺|浜辺|砂浜|シーサイド|浜$/
 
 export type SelectorKind = 'node' | 'area' | 'park'
 export interface Selector {
@@ -124,6 +126,8 @@ export interface OverpassElement {
   bounds?: { minlat: number; minlon: number; maxlat: number; maxlon: number }
   center?: { lat: number; lon: number }
   tags?: Record<string, string>
+  /** 事前生成（osmium）でのみ: way/relation の範囲。境内の node を吸収する判定に使う（v1.3.2） */
+  extent?: { minlat: number; minlon: number; maxlat: number; maxlon: number }
 }
 
 export interface OverpassResponse {
@@ -191,7 +195,11 @@ export function isWorthVisiting(el: OverpassElement, category: Category): boolea
     if (!notable && (el.type === 'node' || bboxDiagonalM(el) < MIN_PARK_BBOX_DIAGONAL_M)) return false
   }
   if ((category === 'cafe' || category === 'bakery' || category === 'sweets') && (tags.brand || tags['brand:wikidata'])) return false
+  // brand タグの無いチェーン店（v1.3.2）
+  if ((category === 'cafe' || category === 'bakery' || category === 'sweets') && isChainName(tags.name ?? '')) return false
   if (category === 'shrine' && tags.religion && !/^(shinto|buddhist)$/.test(tags.religion)) return false
+  // 寺社の付属建物・小祠（本殿・拝殿・〜堂・地蔵など）。wikidata / heritage があれば残す（v1.3.2）
+  if (category === 'shrine' && !tags.wikidata && !tags.heritage && isWorshipPartName(tags['name:ja'] ?? tags.name ?? '')) return false
   if (tags.access === 'private' || tags.access === 'no') return false
   if (tags.disused === 'yes' || tags['disused:amenity']) return false
   return true
