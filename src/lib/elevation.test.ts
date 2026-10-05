@@ -49,6 +49,26 @@ describe('summarizeElevation', () => {
     expect(summarizeElevation(jitter, 3).gainOneWayM).toBe(0)
     expect(summarizeElevation(jitter, 3, { noiseThresholdM: 0 }).gainOneWayM).toBe(12)
   })
+  it('v1.2: tracks the summit so a gentle descent after it is not lost (round trip > one way)', () => {
+    // 旧実装は基準点が 90m で止まり、山頂 90.5m → 85.1m の下り（= 復路の上り）を落として往復 = 片道になっていた
+    const s = summarizeElevation([67.6, 69.6, 73.4, 78.2, 83.2, 87.4, 90, 90.5, 88.8, 85.1], 3.4)
+    expect(s.gainOneWayM).toBe(22.9)
+    expect(s.lossOneWayM).toBe(5.4)
+    expect(s.gainRoundTripM).toBe(28.3)
+    expect(s.climbM).toBe(22.9)
+    expect(s.gainRoundTripM).toBeGreaterThan(s.gainOneWayM)
+  })
+  it('v1.2: steady small steps below the threshold still add up', () => {
+    const s = summarizeElevation([100, 96, 92, 88, 84, 80], 1)
+    expect(s.lossOneWayM).toBe(20)
+    expect(s.gainOneWayM).toBe(0)
+    expect(s.gainRoundTripM).toBe(20)
+  })
+  it('v1.2: a final wiggle below the threshold is ignored', () => {
+    const s = summarizeElevation([0, 20, 17], 1)
+    expect(s.gainOneWayM).toBe(20)
+    expect(s.lossOneWayM).toBe(0)
+  })
   it('drops missing samples but keeps their true distance positions', () => {
     const s = summarizeElevation([0, null, 20, Number.NaN, 20], 2)
     expect(s.profile).toEqual([0, 20, 20])

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { demoServices, type Services } from '../lib/services'
+import { summarizeElevation } from '../lib/elevation'
 import { tripEstimate } from '../lib/trip'
 import { DetailSheet } from './DetailSheet'
 import type { Origin, ViewPlace } from './types'
@@ -121,6 +122,19 @@ describe('DetailSheet', () => {
     const stats = document.querySelector('.stats') as HTMLElement
     expect(within(stats).getByText(t.km.toFixed(1))).toBeTruthy()
     expect(within(stats).getByText(String(t.minutes))).toBeTruthy()
+  })
+
+  it('v1.2: 3rd cell = round-trip climb (round) / outbound climb (one way); sub line shows G', async () => {
+    const elevation = summarizeElevation([67.6, 69.6, 73.4, 78.2, 83.2, 87.4, 90, 90.5, 88.8, 85.1], 3.4)
+    const p: ViewPlace = { ...place, category: 'museum', elevation, elevationState: 'ready' }
+    const r = renderSheet({ place: p, mode: 'round' })
+    const cell = () => document.querySelectorAll('.stats__cell')[2] as HTMLElement
+    expect(cell().querySelector('.stats__num')?.textContent).toBe('+28m')
+    expect(cell().querySelector('.stats__label')?.textContent).toBe('往復の上り')
+    expect(cell().querySelector('.stats__sub')?.textContent).toContain('片道 +23m')
+    r.rerender({ mode: 'oneway' })
+    await waitFor(() => expect(cell().querySelector('.stats__num')?.textContent).toBe('+23m')) // CountUp のアニメ後
+    expect(cell().querySelector('.stats__label')?.textContent).toBe('行きの上り')
   })
 
   it('D6: segment sits under the name and above the stats', () => {

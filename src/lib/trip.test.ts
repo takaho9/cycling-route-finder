@@ -21,7 +21,7 @@ describe('roundTripMinutes (D2)', () => {
 })
 
 describe('tripEstimate (D2: one function for card / gacha / detail / departure)', () => {
-  const elevation = summarizeElevation([10, 20, 30, 25, 40], 4) // 行き +30m / 帰り +15m（ノイズ閾値 5m）
+  const elevation = summarizeElevation([10, 20, 30, 20, 40], 4) // 行き +40m / 帰り +10m（ノイズ閾値 5m）
   const place = { distanceKm: 4, elevation }
 
   it('estimate: straight × detour, round trip time includes the climb penalty', () => {
@@ -40,6 +40,22 @@ describe('tripEstimate (D2: one function for card / gacha / detail / departure)'
     expect(t.gainM).toBe(Math.round(elevation.gainOneWayM))
     expect(t.rawMinutes).toBeCloseTo((5.2 / 16) * 60 + (elevation.gainOneWayM / 10) * 0.5, 6)
     expect(t.climbM).toBe(Math.round(elevation.climbM))
+  })
+
+  it('v1.2: round trip climb = outbound up + return up (> one-way); G = max of the two', () => {
+    // 山を越えて少し下った先が目的地（デモの「白山美術館」と同じ形）: 行き +22.9m / 帰り +5.4m
+    const e = summarizeElevation([67.6, 69.6, 73.4, 78.2, 83.2, 87.4, 90, 90.5, 88.8, 85.1], 3.4)
+    const round = tripEstimate({ distanceKm: 3.4, elevation: e }, 'round', 16)
+    const oneway = tripEstimate({ distanceKm: 3.4, elevation: e }, 'oneway', 16)
+    expect(oneway.gainM).toBe(23)
+    expect(round.gainM).toBe(28)
+    expect(round.gainM!).toBeGreaterThan(oneway.gainM!)
+    // G は往復/片道どちらでも同じ（ラベル・サブ行用）
+    expect(round.climbM).toBe(23)
+    expect(oneway.climbM).toBe(23)
+    // 上りペナルティ: その mode の獲得標高 10m ごとに +0.5 分
+    expect(round.rawMinutes - (round.km / 16) * 60).toBeCloseTo((e.gainRoundTripM / 10) * 0.5, 6)
+    expect(oneway.rawMinutes - (oneway.km / 16) * 60).toBeCloseTo((e.gainOneWayM / 10) * 0.5, 6)
   })
 
   it('a route distance replaces the estimate', () => {

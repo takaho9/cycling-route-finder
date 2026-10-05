@@ -85,6 +85,61 @@ export function smoothedMaxGradePct(elev: readonly number[], km: readonly number
 const round1 = (n: number) => Math.round(n * 10) / 10
 
 /**
+ * ヒステリシス付きの累積上り/下り (m)。
+ * 「確定した山・谷（直前の折り返し点から threshold を超えて反転した点）」の間の差を足し合わせる。
+ * 上りの途中では最高点を、下りの途中では最低点を追い続けるので、閾値未満の刻みで少しずつ
+ * 上り下りしても取りこぼさない。最後の区間（終点に向かう上り/下り）も、方向が確定していれば計上する。
+ *
+ * 以前の実装は「最後に確定した点からの差」で判定していたため、山頂の手前で基準点が止まり、
+ * 山頂→目的地の下り（= 復路の上り）を落としていた（v1.2: 往復の上り＝片道の上りになるバグ）。
+ */
+export function gainLoss(profile: readonly number[], thresholdM: number): { gain: number; loss: number } {
+  let gain = 0
+  let loss = 0
+  if (profile.length < 2) return { gain, loss }
+  let dir: -1 | 0 | 1 = 0
+  // dir=0 の間は最高・最低を追い、先に threshold を超えた方向で確定
+  let lo = profile[0]
+  let hi = profile[0]
+  let anchor = profile[0] // 直前の折り返し点
+  let ext = profile[0] // 現在の区間の極値（上りなら最高、下りなら最低）
+  for (let i = 1; i < profile.length; i++) {
+    const p = profile[i]
+    if (dir === 0) {
+      if (p - lo > thresholdM) {
+        dir = 1
+        anchor = lo
+        ext = p
+      } else if (hi - p > thresholdM) {
+        dir = -1
+        anchor = hi
+        ext = p
+      } else {
+        lo = Math.min(lo, p)
+        hi = Math.max(hi, p)
+      }
+    } else if (dir === 1) {
+      if (p > ext) ext = p
+      else if (ext - p > thresholdM) {
+        gain += ext - anchor
+        anchor = ext
+        ext = p
+        dir = -1
+      }
+    } else if (p < ext) ext = p
+    else if (p - ext > thresholdM) {
+      loss += anchor - ext
+      anchor = ext
+      ext = p
+      dir = 1
+    }
+  }
+  if (dir === 1) gain += ext - anchor
+  else if (dir === -1) loss += anchor - ext
+  return { gain, loss }
+}
+
+/**
  * 出発地→目的地の等間隔サンプルの標高（欠損は null/NaN）と片道距離から標高サマリを計算。
  * 欠損点は除外し、残った点は本来の距離位置で評価する。有効点が 2 未満なら null。
  */
@@ -103,21 +158,7 @@ export function summarizeElevation(
     }
   })
   const seaRun = interiorSeaRun(profile)
-  let gain = 0
-  let loss = 0
-  if (profile.length >= 2) {
-    let ref = profile[0]
-    for (let i = 1; i < profile.length; i++) {
-      const d = profile[i] - ref
-      if (d > noiseThresholdM) {
-        gain += d
-        ref = profile[i]
-      } else if (-d > noiseThresholdM) {
-        loss += -d
-        ref = profile[i]
-      }
-    }
-  }
+  const { gain, loss } = gainLoss(profile, noiseThresholdM)
   const maxGrade = smoothedMaxGradePct(profile, profileKm, rules.minGradeSegmentM)
   const climb = Math.max(gain, loss)
   const climbPerKm = distanceKm > 0 ? climb / distanceKm : 0
