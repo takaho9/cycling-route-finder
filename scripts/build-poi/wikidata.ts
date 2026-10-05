@@ -93,3 +93,47 @@ export function parseWikidataBindings(json: SparqlJson): WikidataItem[] {
   }
   return [...byQid.values()].sort((a, b) => Number(a.qid.slice(1)) - Number(b.qid.slice(1)))
 }
+
+// ---------------------------------------------------------------------------
+// v1.4（BACKLOG-3 Q4）: OSM の wikidata タグにある QID を、クラスで絞らずに補完する
+// ---------------------------------------------------------------------------
+
+export interface WikidataDetail {
+  qid: string
+  /** 日本語ラベル */
+  label?: string
+  /** "File:xxx.jpg"（P18） */
+  image?: string
+  sitelinks: number
+  heritage: boolean
+}
+
+/** 1 回の SPARQL で問い合わせる QID の数 */
+export const QID_DETAILS_BATCH = 200
+
+export function buildQidDetailsSparql(qids: readonly string[]): string {
+  return `SELECT ?item ?label ?image ?sitelinks ?heritage WHERE {
+  VALUES ?item { ${qids.map((q) => `wd:${q}`).join(' ')} }
+  OPTIONAL { ?item wikibase:sitelinks ?sitelinks }
+  OPTIONAL { ?item rdfs:label ?label . FILTER(LANG(?label) = "ja") }
+  OPTIONAL { ?item wdt:P18 ?image }
+  OPTIONAL { ?item wdt:P1435 ?heritage }
+}`
+}
+
+export function parseQidDetails(json: SparqlJson): Map<string, WikidataDetail> {
+  const out = new Map<string, WikidataDetail>()
+  for (const b of json.results?.bindings ?? []) {
+    const qid = b.item?.value?.split('/').pop()
+    if (!qid || !/^Q\d+$/.test(qid)) continue
+    const d = out.get(qid) ?? { qid, sitelinks: 0, heritage: false }
+    const label = b.label?.value?.trim()
+    if (label && !d.label) d.label = label
+    const image = b.image?.value ? fileTitleFromFilePath(b.image.value) : null
+    if (image && !d.image) d.image = image
+    d.sitelinks = Math.max(d.sitelinks, Number(b.sitelinks?.value ?? 0) || 0)
+    if (b.heritage?.value) d.heritage = true
+    out.set(qid, d)
+  }
+  return out
+}

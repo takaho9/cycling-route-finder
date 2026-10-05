@@ -94,8 +94,15 @@ export function isChainName(name: string): boolean {
 export const WORSHIP_PART_RE =
   /(本殿|拝殿|幣殿|社殿|社務所|授与所|手水舎|手水所|鐘楼|鐘楼堂|鐘撞堂|山門|仁王門|楼門|中門|総門|本堂|堂|祠|小祠|大黒天|地蔵|地蔵尊|神楽殿|神輿庫|神輿殿|宝物殿|鳥居|境内社|末社|摂社|庫裏|客殿|納骨堂)$/
 
-export function isWorshipPartName(name: string): boolean {
-  return WORSHIP_PART_RE.test(name.normalize('NFKC').replace(/\s+/g, ''))
+/**
+ * 建物の部分そのものの名前（本殿・拝殿・山門など）。wikidata のある項目にはこちらを使う
+ * （「不忍池弁天堂」「深川不動堂」のような〜堂の名所を巻き込まないため, v1.4）。
+ */
+export const WORSHIP_BUILDING_PART_RE =
+  /(本殿|拝殿|幣殿|社殿|社務所|授与所|手水舎|手水所|鐘楼|鐘楼堂|鐘撞堂|山門|仁王門|楼門|中門|総門|本堂|神楽殿|神輿庫|神輿殿|宝物殿|鳥居|境内社|末社|摂社|庫裏|客殿|納骨堂)$/
+
+export function isWorshipPartName(name: string, { strict = false }: { strict?: boolean } = {}): boolean {
+  return (strict ? WORSHIP_BUILDING_PART_RE : WORSHIP_PART_RE).test(name.normalize('NFKC').replace(/\s+/g, ''))
 }
 
 // ---------------------------------------------------------------------------

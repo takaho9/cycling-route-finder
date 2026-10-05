@@ -12,7 +12,7 @@ import type { OverpassElement } from '../../src/lib/places/overpass'
 import { mainlandRings, type GeomWay } from './boundary'
 import { TOKYO_STATION } from './config'
 import { fetchOverpassGrid, gridCells } from './overpass-grid'
-import type { WikidataItem } from './wikidata'
+import type { WikidataDetail, WikidataItem } from './wikidata'
 
 export type OsmSourceMode = 'auto' | 'geofabrik' | 'overpass'
 
@@ -25,12 +25,17 @@ export interface AcquireDeps {
     poi(pbf: string): Promise<OverpassElement[]>
     boundary(pbf: string): Promise<GeomWay[]>
     timestamp(pbf: string): Promise<string | undefined>
+    /** 市区町村（admin_level=7, v1.4 Q1） */
+    municipalities?(pbf: string): Promise<{ name: string; ways: GeomWay[] }[]>
   }
   /** Overpass に 1 クエリ（エンドポイントの切替は実装側） */
   overpass(query: string): Promise<{ elements?: unknown[] }>
   /** Overpass の境界クエリ（フォールバック） */
   overpassBoundary(): Promise<GeomWay[]>
-  wikidata(): Promise<WikidataItem[]>
+  /** p31Only = サブクラスをたどる版がタイムアウトして P31 のみで取った（v1.4 Q4: 警告） */
+  wikidata(): Promise<WikidataItem[] | { items: WikidataItem[]; p31Only?: boolean }>
+  /** OSM の wikidata タグの QID をクラスで絞らずに補完（v1.4 Q4） */
+  wikidataDetails?(qids: string[]): Promise<Map<string, WikidataDetail>>
   gridGapMs?: number
   log?: (msg: string) => void
 }
@@ -39,6 +44,8 @@ export interface Acquired {
   elements: OverpassElement[]
   boundaryWays: GeomWay[]
   wikidata: WikidataItem[]
+  wikidataDetails: Map<string, WikidataDetail>
+  municipalities: { name: string; ways: GeomWay[] }[]
   warnings: string[]
   warnStats: Record<string, number>
   osm: { source: 'geofabrik' | 'overpass'; timestamp?: string }
@@ -126,11 +133,41 @@ export async function acquire(deps: AcquireDeps): Promise<Acquired> {
   // ---- Wikidata（失敗しても OSM だけで続行）
   let wikidata: WikidataItem[] = []
   try {
-    wikidata = await deps.wikidata()
+    const got = await deps.wikidata()
+    wikidata = Array.isArray(got) ? got : got.items
+    if (!Array.isArray(got) && got.p31Only) {
+      warnings.push('Wikidata は P31 のみのモードで取得（サブクラスを含む版がタイムアウト）。クラス別件数が少なめになる')
+      warnStats.warn_wikidata_p31_only = 1
+    }
   } catch (e) {
     warnings.push(`Wikidata SPARQL に失敗（OSM だけで続行）: ${msg(e)}`)
     warnStats.warn_wikidata_failed = 1
   }
 
-  return { elements, boundaryWays, wikidata, warnings, warnStats, osm: osm! }
+  // OSM の wikidata タグの QID を補完（v1.4 Q4。失敗しても続行）
+  let wikidataDetails = new Map<string, WikidataDetail>()
+  if (deps.wikidataDetails) {
+    const qids = [...new Set(elements.map((e) => e.tags?.wikidata?.split(';')[0].trim().toUpperCase()).filter((q): q is string => !!q && /^Q\d+$/.test(q)))]
+    try {
+      wikidataDetails = await deps.wikidataDetails(qids)
+      log(`wikidata details: ${wikidataDetails.size}/${qids.length} QIDs`)
+    } catch (e) {
+      warnings.push(`Wikidata の QID 補完に失敗（ラベル・写真の補完なしで続行）: ${msg(e)}`)
+      warnStats.warn_wikidata_details_failed = 1
+    }
+  }
+
+  // 市区町村（v1.4 Q1。失敗しても続行: 汎用名に市区町村名を補えないだけ）
+  let municipalities: Acquired['municipalities'] = []
+  if (osm?.source === 'geofabrik' && deps.osmium.municipalities && deps.pbf) {
+    try {
+      municipalities = await deps.osmium.municipalities(deps.pbf)
+      log(`municipalities: ${municipalities.length}`)
+    } catch (e) {
+      warnings.push(`市区町村の境界を取れなかった（汎用名に市区町村名を補わない）: ${msg(e)}`)
+      warnStats.warn_municipalities_failed = 1
+    }
+  }
+
+  return { elements, boundaryWays, wikidata, wikidataDetails, municipalities, warnings, warnStats, osm: osm! }
 }

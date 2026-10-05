@@ -7,7 +7,7 @@ import { parseOverpassElements, type OverpassElement } from '../../src/lib/place
 import { attractiveness, dedupeNearby } from '../../src/lib/places/sampling'
 import type { Category, EmbeddedPhoto } from '../../src/lib/types'
 import { MAINLAND_MIN_LAT, MATCH_RADIUS_M, TOKYO_STATION, WD_ONLY_MIN_SITELINKS, WD_ONLY_MIN_SITELINKS_BRIDGE } from './config'
-import type { WikidataItem } from './wikidata'
+import type { WikidataDetail, WikidataItem } from './wikidata'
 
 /** 生成途中の 1 件 */
 export interface PoiDraft {
@@ -24,6 +24,8 @@ export interface PoiDraft {
   p18?: string
   photo?: EmbeddedPhoto
   score?: number
+  /** Wikidata の日本語ラベル（汎用名の置き換えに使う, v1.4 Q1） */
+  wdLabel?: string
   /** way/relation の範囲（osmium 経路のみ。境内の node の吸収に使う） */
   extent?: { minlat: number; minlon: number; maxlat: number; maxlon: number }
 }
@@ -101,7 +103,16 @@ function applyWikidata(d: PoiDraft, w: WikidataItem) {
   d.sitelinks = w.sitelinks
   if (w.heritage) d.wdHeritage = true
   if (w.image) d.p18 = w.image
+  if (w.label) d.wdLabel = w.label
   if (d.category === 'other') d.category = w.category
+}
+
+/** クラスで絞らない補完（v1.4 Q4）: ラベル・P18・sitelinks・P1435 */
+function applyDetail(d: PoiDraft, w: WikidataDetail) {
+  d.sitelinks = Math.max(d.sitelinks ?? 0, w.sitelinks)
+  if (w.heritage) d.wdHeritage = true
+  if (w.image && !d.p18) d.p18 = w.image
+  if (w.label && !d.wdLabel) d.wdLabel = w.label
 }
 
 /**
@@ -110,13 +121,19 @@ function applyWikidata(d: PoiDraft, w: WikidataItem) {
  * 2. タグが無い OSM 要素と「同名 or 類似名 かつ 150m 以内」（最も近いもの。1 対 1）
  * 3. どれにも当たらない Wikidata 項目は、sitelinks がしきい値以上なら単独で採用（id "wd:Q..."）
  */
-export function mergeSources(osm: readonly PoiDraft[], wd: readonly WikidataItem[]): { pois: PoiDraft[]; stats: MergeStats } {
+export function mergeSources(
+  osm: readonly PoiDraft[],
+  wd: readonly WikidataItem[],
+  details: ReadonlyMap<string, WikidataDetail> = new Map(),
+): { pois: PoiDraft[]; stats: MergeStats } {
   const pois = osm.map((d) => ({ ...d, tags: { ...d.tags } }))
   const stats: MergeStats = { osm: osm.length, wikidata: wd.length, matchedByTag: 0, matchedByName: 0, wikidataOnly: 0, droppedWikidataOnly: 0 }
   const wdById = new Map(wd.map((w) => [w.qid, w]))
   const matched = new Set<string>()
   for (const d of pois) {
     const q = firstQid(d.tags.wikidata)
+    const detail = q ? details.get(q) : undefined
+    if (detail) applyDetail(d, detail)
     const w = q ? wdById.get(q) : undefined
     if (!w) continue
     applyWikidata(d, w)
@@ -146,8 +163,9 @@ export function mergeSources(osm: readonly PoiDraft[], wd: readonly WikidataItem
       stats.matchedByName++
       continue
     }
-    const min = w.classQid === 'Q12280' ? WD_ONLY_MIN_SITELINKS_BRIDGE : WD_ONLY_MIN_SITELINKS
-    if (w.sitelinks < min || w.lat < MAINLAND_MIN_LAT) {
+    // 橋は数が多いので sitelinks 4 以上か文化財だけ（v1.4 Q12）
+    const ok = w.classQid === 'Q12280' ? w.sitelinks >= WD_ONLY_MIN_SITELINKS_BRIDGE || w.heritage : w.sitelinks >= WD_ONLY_MIN_SITELINKS
+    if (!ok || w.lat < MAINLAND_MIN_LAT) {
       stats.droppedWikidataOnly++
       continue
     }
@@ -160,6 +178,7 @@ export function mergeSources(osm: readonly PoiDraft[], wd: readonly WikidataItem
       category: w.category,
       tags: { wikidata: w.qid },
       sitelinks: w.sitelinks,
+      wdLabel: w.label,
       ...(w.heritage ? { wdHeritage: true } : {}),
       ...(w.image ? { p18: w.image } : {}),
     })
@@ -173,12 +192,19 @@ const round1 = (v: number) => Math.round(v * 10) / 10
  * 見栄えスコア（事前計算）。既存の attractiveness（wikidata・commons/image・heritage・wikipedia・面積）に
  * sitelinks（人気度）、写真の有無、Wikidata 側の文化財指定を加える。
  */
-export function appealScore(d: Pick<PoiDraft, 'tags' | 'sitelinks' | 'photo' | 'p18' | 'wdHeritage'>): number {
+const FOOD_CATS = new Set(['cafe', 'bakery', 'sweets'])
+
+export function appealScore(d: Pick<PoiDraft, 'tags' | 'sitelinks' | 'photo' | 'p18' | 'wdHeritage'> & Partial<Pick<PoiDraft, 'category'>>): number {
   let s = attractiveness({ tags: d.tags })
   if (d.sitelinks && d.sitelinks > 0) s += Math.min(4, Math.log2(1 + d.sitelinks))
   if (d.photo) s += d.photo.nearby ? 1 : 2
   else if (d.p18) s += 1
   if (d.wdHeritage && !d.tags.heritage) s += 2
+  // カフェなど（v1.4 Q5）: 公式サイト・営業時間がある店は実在・営業の手がかりになる
+  if (d.category && FOOD_CATS.has(d.category)) {
+    if (d.tags.website || d.tags['contact:website']) s += 1
+    if (d.tags.opening_hours) s += 0.5
+  }
   return round1(s)
 }
 

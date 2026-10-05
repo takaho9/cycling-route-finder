@@ -349,6 +349,29 @@ export async function fetchCommonsImageInfo(
 }
 
 /**
+ * Commons のカテゴリ（OSM の wikimedia_commons=Category:...）から代表画像を 1 枚選ぶ（v1.4 Q15）。
+ * カテゴリ内のファイルのうち、ファイル名に施設名の一部を含むものを優先し、無ければ最初の写真。
+ * 通信失敗は throw、写真が無ければ null。
+ */
+export async function fetchCommonsCategoryImage(
+  category: string,
+  name: string,
+  width: number,
+  opts: RequestOptions = {},
+): Promise<{ title: string; info: PhotoInfo } | null> {
+  const cat = category.trim().replace(/_/g, ' ')
+  if (!/^Category:/i.test(cat)) return null
+  const url =
+    `${COMMONS_API}?action=query&generator=categorymembers&gcmtitle=${encodeURIComponent(cat)}&gcmtype=file&gcmlimit=20` +
+    `&${IMAGEINFO_PARAMS}&iiurlwidth=${width}`
+  const json = await fetchJson<ImageInfoResponse>(url, undefined, { timeoutMs: 8_000, ...opts })
+  const pages = Object.values(json.query?.pages ?? {}).sort((a, b) => ((a as { index?: number }).index ?? 0) - ((b as { index?: number }).index ?? 0))
+  const usable = pages.map((page) => ({ title: page.title ?? '', info: toPhotoInfo(page, width) })).filter((x) => x.title && x.info)
+  const chosen = usable.find((x) => titleMatchesName(x.title, name)) ?? usable[0]
+  return chosen ? { title: chosen.title, info: chosen.info! } : null
+}
+
+/**
  * Commons の近傍画像検索（半径 100m, BACKLOG A4/C11）。
  * ファイル名に施設名の一部（2 文字以上）が含まれる写真を優先し、無ければ一番近い写真。結果には nearby=true を付ける。
  */

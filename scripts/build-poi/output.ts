@@ -17,7 +17,8 @@ import { DATA_SOURCES, MAX_SHRINK_RATIO, REGION_NAME } from './config'
 import type { PoiDraft } from './merge'
 
 /** 静的データに残すタグ（アプリが使うものだけ。写真を埋め込んだら画像タグは不要） */
-const STATIC_TAGS = ['wikidata', 'heritage', 'size_m'] as const
+/** v1.4 Q5: 営業時間・公式サイト・料理の種類も残す（カフェなどの加点と、将来の表示用） */
+const STATIC_TAGS = ['wikidata', 'heritage', 'size_m', 'opening_hours', 'website', 'cuisine'] as const
 const IMAGE_TAGS = ['wikimedia_commons', 'image'] as const
 
 const r5 = (v: number) => Math.round(v * 1e5) / 1e5

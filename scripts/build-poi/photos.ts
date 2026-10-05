@@ -6,6 +6,7 @@
 import {
   commonsFileFromTags,
   commonsNearbyOrThrow,
+  fetchCommonsCategoryImage,
   fetchCommonsImageInfo,
   NEARBY_PHOTO_CATEGORIES,
   PHOTO_WIDTH_DETAIL,
@@ -20,11 +21,14 @@ export interface PhotoSource {
   imageInfo(titles: readonly string[], width: number): Promise<Map<string, PhotoInfo | null>>
   /** 通信失敗は throw */
   nearby(p: { lat: number; lng: number; name: string }, width: number): Promise<PhotoInfo | null>
+  /** Category: リンクの代表画像（v1.4 Q15）。通信失敗は throw */
+  category?(category: string, name: string, width: number): Promise<{ title: string; info: PhotoInfo } | null>
 }
 
 export const commonsPhotoSource: PhotoSource = {
   imageInfo: (titles, width) => fetchCommonsImageInfo(titles, width, { timeoutMs: 30_000 }),
   nearby: (p, width) => commonsNearbyOrThrow(p, width, { timeoutMs: 30_000 }),
+  category: (cat, name, width) => fetchCommonsCategoryImage(cat, name, width, { timeoutMs: 30_000 }),
 }
 
 /** 近傍検索がこの回数続けて失敗したら打ち切る（Commons が落ちているときに数百回叩かない） */
@@ -49,6 +53,8 @@ export interface PhotoStats {
   resolved: number
   /** imageinfo を取れなかったファイル数（通信失敗。写真なしで続行） */
   infoFailed: number
+  categoryTried: number
+  categoryFound: number
   nearbyTried: number
   nearbyFound: number
   nearbyErrors: number
@@ -69,7 +75,7 @@ async function safeInfo(source: PhotoSource, titles: string[], width: number, lo
 export async function attachPhotos(
   pois: PoiDraft[],
   source: PhotoSource,
-  { nearbyLimit = 0, log = () => {} }: { nearbyLimit?: number; log?: (msg: string) => void } = {},
+  { nearbyLimit = 0, categoryLimit = 0, log = () => {} }: { nearbyLimit?: number; categoryLimit?: number; log?: (msg: string) => void } = {},
 ): Promise<PhotoStats> {
   const titleOf = new Map<string, string>()
   for (const d of pois) {
@@ -95,6 +101,34 @@ export async function attachPhotos(
     if (!s) continue
     d.photo = toEmbed(s, large.get(t!))
     resolved++
+  }
+  // Category: リンクの代表画像（v1.4 Q15）: スコアの高い順に上限まで。取れなければ近傍検索へ
+  let categoryTried = 0
+  let categoryFound = 0
+  if (source.category && categoryLimit > 0) {
+    const cats = pois
+      .filter((d) => !d.photo && /^Category:/i.test(d.tags.wikimedia_commons?.split(';')[0].trim() ?? ''))
+      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0) || (a.id < b.id ? -1 : 1))
+      .slice(0, categoryLimit)
+    const got: { d: PoiDraft; title: string; info: PhotoInfo }[] = []
+    let streak = 0
+    for (const d of cats) {
+      if (streak >= NEARBY_MAX_CONSECUTIVE_ERRORS) break
+      categoryTried++
+      try {
+        const r = await source.category(d.tags.wikimedia_commons!.split(';')[0].trim(), d.name, PHOTO_WIDTH_LIST)
+        streak = 0
+        if (r) got.push({ d, ...r })
+      } catch {
+        streak++
+      }
+    }
+    const big = got.length ? await safeInfo(source, got.map((g) => g.title), PHOTO_WIDTH_DETAIL, log) : new Map<string, PhotoInfo | null>()
+    for (const g of got) {
+      g.d.photo = toEmbed(g.info, big.get(g.title))
+      categoryFound++
+    }
+    log(`photos: category ${categoryFound}/${categoryTried}`)
   }
   // 近傍検索: 写真の無い公園・展望・寺社・史跡を、スコアの高い順に上限まで
   const candidates = pois
@@ -129,5 +163,5 @@ export async function attachPhotos(
   if (candidates.length) log(`photos: nearby ${nearbyFound}/${nearbyTried} (errors ${nearbyErrors})`)
   if (infoFailed) log(`photos: imageinfo failed for ${infoFailed}/${titles.length} files`)
   log(`photos: ${resolved}/${titles.length} files resolved to thumbnails`)
-  return { titles: titles.length, resolved, infoFailed, nearbyTried, nearbyFound, nearbyErrors, nearbyAborted }
+  return { titles: titles.length, resolved, infoFailed, categoryTried, categoryFound, nearbyTried, nearbyFound, nearbyErrors, nearbyAborted }
 }

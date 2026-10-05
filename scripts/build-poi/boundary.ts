@@ -113,3 +113,30 @@ export function ringsBbox(rings: readonly Pt[][]): [number, number, number, numb
   }
   return [s, w, n, e]
 }
+
+/**
+ * 市区町村の判定（v1.4 Q1）。名前ごとにリングを組んで間引き、点がどれに入るかを返す。
+ */
+export function municipalityLookup(areas: readonly { name: string; ways: readonly GeomWay[] }[], tolerance = 0.0005): (p: { lat: number; lng: number }) => string | undefined {
+  const polys = areas
+    .map((a) => {
+      const rings = assembleRings(a.ways).map((ring) => simplify(ring, tolerance))
+      return { name: a.name, rings, bbox: rings.length ? ringsBbox(rings) : null }
+    })
+    .filter((x) => x.bbox)
+  return (p) => {
+    for (const x of polys) {
+      const [s, w, n, e] = x.bbox!
+      if (p.lat < s || p.lat > n || p.lng < w || p.lng > e) continue
+      let inside = false
+      for (const ring of x.rings)
+        for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+          const [yi, xi] = ring[i]
+          const [yj, xj] = ring[j]
+          if (yi > p.lat !== yj > p.lat && p.lng < ((xj - xi) * (p.lat - yi)) / (yj - yi) + xi) inside = !inside
+        }
+      if (inside) return x.name
+    }
+    return undefined
+  }
+}

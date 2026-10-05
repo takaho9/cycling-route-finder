@@ -205,14 +205,17 @@ export function isTokyoBoundary(tags: Record<string, string>): boolean {
   return tags.boundary === 'administrative' && tags.admin_level === '4' && tags.name === '東京都'
 }
 
-/**
- * `osmium cat -f opl,add_metadata=false` の出力から、東京都 relation の outer ウェイを座標つきで返す。
- * 抽出範囲外で欠けたメンバー（遠い島など）は飛ばす（リングを組むときに閉じないので捨てられる）。
- */
-export function boundaryWaysFromOpl(opl: string): GeomWay[] {
+interface OplData {
+  nodes: Map<number, { lat: number; lon: number }>
+  ways: Map<number, number[]>
+  rels: { id: number; tags: Record<string, string>; members: { type: string; ref: number; role: string }[] }[]
+}
+
+/** `osmium cat -f opl,add_metadata=false` の出力を読む（node 座標・way のノード列・relation のメンバー） */
+export function parseOpl(opl: string): OplData {
   const nodes = new Map<number, { lat: number; lon: number }>()
   const ways = new Map<number, number[]>()
-  const rels: { tags: Record<string, string>; members: { type: string; ref: number; role: string }[] }[] = []
+  const rels: OplData['rels'] = []
   for (const line of opl.split('\n')) {
     if (!line) continue
     const fields = new Map<string, string>()
@@ -234,21 +237,43 @@ export function boundaryWaysFromOpl(opl: string): GeomWay[] {
           const at = m.indexOf('@')
           return { type: m[0], ref: Number(m.slice(1, at)), role: decodeOpl(m.slice(at + 1)) }
         })
-      rels.push({ tags: oplTags(fields.get('T')), members })
+      rels.push({ id, tags: oplTags(fields.get('T')), members })
     }
   }
-  const rel = rels.find((r) => r.tags['ISO3166-2'] === 'JP-13') ?? rels.find((r) => isTokyoBoundary(r.tags))
-  if (!rel) return []
+  return { nodes, ways, rels }
+}
+
+/** relation の outer ウェイを座標つきで（欠けたメンバーは飛ばす） */
+function outerWays(data: OplData, rel: OplData['rels'][number]): GeomWay[] {
   const out: GeomWay[] = []
   for (const m of rel.members) {
     if (m.type !== 'w' || (m.role && m.role !== 'outer')) continue
-    const refs = ways.get(m.ref)
+    const refs = data.ways.get(m.ref)
     if (!refs) continue
-    const geometry = refs.map((r) => nodes.get(r))
+    const geometry = refs.map((r) => data.nodes.get(r))
     if (geometry.some((g) => !g)) continue
     out.push({ type: 'way', id: m.ref, geometry: geometry as { lat: number; lon: number }[] })
   }
   return out
+}
+
+/**
+ * 東京都 relation の outer ウェイを座標つきで返す。
+ * 抽出範囲外で欠けたメンバー（遠い島など）は飛ばす（リングを組むときに閉じないので捨てられる）。
+ */
+export function boundaryWaysFromOpl(opl: string): GeomWay[] {
+  const data = parseOpl(opl)
+  const rel = data.rels.find((r) => r.tags['ISO3166-2'] === 'JP-13') ?? data.rels.find((r) => isTokyoBoundary(r.tags))
+  return rel ? outerWays(data, rel) : []
+}
+
+/** 市区町村（admin_level=7）の名前と outer ウェイ（v1.4 Q1: 汎用名に「（江東区）」を補う） */
+export function municipalitiesFromOpl(opl: string): { name: string; ways: GeomWay[] }[] {
+  const data = parseOpl(opl)
+  return data.rels
+    .filter((r) => r.tags.boundary === 'administrative' && r.tags.admin_level === '7' && (r.tags['name:ja'] ?? r.tags.name))
+    .map((r) => ({ name: r.tags['name:ja'] ?? r.tags.name, ways: outerWays(data, r) }))
+    .filter((m) => m.ways.length)
 }
 
 // ---------------------------------------------------------------------------
@@ -310,6 +335,15 @@ export async function boundaryWaysFromPbf(input: string, { bin = 'osmium', workD
   await run(bin, ['tags-filter', input, 'r/ISO3166-2=JP-13', 'r/name=東京都', '-o', out, '--overwrite'])
   const opl = await run(bin, ['cat', out, '-f', 'opl,add_metadata=false'], true)
   return boundaryWaysFromOpl(opl)
+}
+
+/** PBF（または .osm）→ 市区町村（admin_level=7）。bbox で切った後のファイルがあればそれを使う */
+export async function municipalitiesFromPbf(input: string, { bin = 'osmium', workDir }: OsmiumOptions): Promise<{ name: string; ways: GeomWay[] }[]> {
+  mkdirSync(workDir, { recursive: true })
+  const out = join(workDir, 'municipalities.osm.pbf')
+  await run(bin, ['tags-filter', input, 'r/admin_level=7', '-o', out, '--overwrite'])
+  const opl = await run(bin, ['cat', out, '-f', 'opl,add_metadata=false'], true)
+  return municipalitiesFromOpl(opl)
 }
 
 /** PBF のレプリケーション時刻（Geofabrik のデータ時点）。無ければ undefined */

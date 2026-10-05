@@ -42,11 +42,13 @@ export function userAgent(contact = process.env.POI_CONTACT || 'https://github.c
 export const MATCH_RADIUS_M = 150
 /** Wikidata だけにある項目を採用する最小 sitelinks（記事が 1 つ以上ある＝それなりに知られている） */
 export const WD_ONLY_MIN_SITELINKS = 1
-/** 橋は数が多いので、Wikidata だけの橋は sitelinks 2 以上 */
-export const WD_ONLY_MIN_SITELINKS_BRIDGE = 2
+/** 橋は数が多いので、Wikidata だけの橋は sitelinks 4 以上か文化財（v1.4 Q12） */
+export const WD_ONLY_MIN_SITELINKS_BRIDGE = 4
 
 /** Commons 近傍検索の上限（任意。CI でも重いので件数を絞る） */
-export const DEFAULT_NEARBY_LIMIT = 300
+export const DEFAULT_NEARBY_LIMIT = 1000
+/** Commons の Category: リンクから代表画像をさがす上限（v1.4 Q15） */
+export const DEFAULT_CATEGORY_PHOTO_LIMIT = 800
 
 /** 健全性チェック: 最低件数（本番）。fixture では使わない */
 export const DEFAULT_MIN_COUNT = 3000

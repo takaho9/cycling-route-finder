@@ -59,7 +59,7 @@ const fmt = (p: Place) =>
 
 /** 「出してはいけない名前」の種類 */
 function badKind(p: Place): string | null {
-  if (p.category === 'shrine' && isWorshipPartName(p.name)) return '付属建物名'
+  if (p.category === 'shrine' && isWorshipPartName(p.name, { strict: !!p.tags?.wikidata })) return '付属建物名'
   if (isGenericName(p.name)) return '汎用名'
   if (!FOOD.has(p.category) && isAnimalName(p.name)) return '動物名'
   if (isNotDestination(p.name, p.tags?.wikidata)) return '目的地でない'

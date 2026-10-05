@@ -78,3 +78,40 @@ describe('seaside is limited to real seaside names (v1.3.2)', () => {
     ['つばさ浜', 'park', 'seaside'],
   ])('%s (%s) → %s', (name, leisure, cat) => expect(categorizeOsmTags({ name, leisure })).toBe(cat))
 })
+
+describe('v1.4 runtime rules (isWorthVisiting / categorize)', () => {
+  const C = { lat: 35.68, lng: 139.76 }
+  const node = (id: number, tags: Record<string, string>) => ({ type: 'node' as const, id, lat: 35.68, lon: 139.76, tags })
+  it('Q3 / Q2 / Q4 / Q14: drops non-destinations, animals, unknown peaks and shops tagged as attractions', () => {
+    const names = parseOverpassElements(
+      [
+        node(1, { name: '東中野駅 駅スタンプ', tourism: 'attraction' }),
+        node(2, { name: 'フナボリゴルフ', tourism: 'attraction' }),
+        node(3, { name: 'ハシビロコウ', tourism: 'attraction', attraction: 'animal' }),
+        node(4, { name: '高尾山', natural: 'peak', wikidata: 'Q1' }),
+        node(5, { name: '名もなき峰', natural: 'peak' }),
+        node(6, { name: 'お土産店', tourism: 'attraction', shop: 'gift' }),
+        node(7, { name: '合羽橋道具街', historic: 'yes' }),
+        node(8, { name: '上野動物園', tourism: 'zoo' }),
+        node(9, { name: '赤坂の何か', tourism: 'attraction', wikidata: 'Q11635414' }),
+      ],
+      C,
+    ).map((p) => `${p.name}:${p.category}`)
+    expect(names).toEqual(['高尾山:viewpoint', '合羽橋道具街:attraction', '上野動物園:attraction'])
+  })
+
+  it('Q13: more chains', () => {
+    for (const n of ['McCafé by Barista', 'ブルーシール', 'キャラバンコーヒー 船堀店', 'ドンレミー', 'HARBS', '銀座和蘭豆', '猿田彦珈琲']) expect(isChainName(n)).toBe(true)
+  })
+
+  it('generic / animal / not-destination detectors used by the simulation', async () => {
+    const { isGenericName, isAnimalName, isNotDestination } = await import('./quality')
+    expect(isGenericName('八幡神社')).toBe(true)
+    expect(isGenericName('八幡神社（江東区）')).toBe(false)
+    expect(isAnimalName('ハシビロコウ')).toBe(true)
+    expect(isAnimalName('ゾウ舎')).toBe(true)
+    expect(isNotDestination('第六台場', 'Q49173570')).toBe(true)
+    expect(isNotDestination('つどいの池 (調整池)')).toBe(true)
+    expect(isNotDestination('代々木公園')).toBe(false)
+  })
+})

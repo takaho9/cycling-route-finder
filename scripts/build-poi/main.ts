@@ -15,11 +15,12 @@
  *   --fixture <dir>      通信せず fixture を使う（overpass.json / wikidata.json / [boundary.json] / [coverage.json] / [photos.json]）
  *   --sample             index.json に "sample": true を入れる（網羅性の無いサンプル）
  *   --min-count <n>      最低件数（既定: 本番 3000 / fixture 1）
- *   --nearby-limit <n>   Commons 近傍検索の上限（既定 300。0 で無効）
+ *   --nearby-limit <n>   Commons 近傍検索の上限（既定 1000。0 で無効）
+ *   --category-photo-limit <n>  Commons の Category: から代表画像をさがす上限（既定 800。0 で無効）
  *   --no-photos          写真の解決をしない
  *   --allow-shrink       前回比の減少チェックを無効にする（意図的に減らすときだけ）
  */
-import { appendFileSync, readFileSync } from 'node:fs'
+import { appendFileSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { parseArgs } from 'node:util'
 import { fetchJson, HttpError, sleep } from '../../src/lib/http'
@@ -27,13 +28,13 @@ import { checkOverpassRemark, type OverpassElement, type OverpassResponse } from
 import type { PhotoInfo } from '../../src/lib/photos'
 import type { StaticCoverage, StaticIndex } from '../../src/lib/places/staticData'
 import { acquire, type OsmSourceMode } from './acquire'
-import { buildBoundaryQuery, type GeomWay } from './boundary'
+import { buildBoundaryQuery, municipalityLookup, type GeomWay } from './boundary'
 import { buildDataset } from './build'
-import { BUILD_OVERPASS_ENDPOINTS, DEFAULT_MIN_COUNT, DEFAULT_NEARBY_LIMIT, OVERPASS_GRID_TIMEOUT_S, userAgent, WIKIDATA_SPARQL_ENDPOINT } from './config'
-import { boundaryWaysFromPbf, osmiumAvailable, pbfTimestamp, poiElementsFromPbf } from './osm-pbf'
+import { BUILD_OVERPASS_ENDPOINTS, DEFAULT_CATEGORY_PHOTO_LIMIT, DEFAULT_MIN_COUNT, DEFAULT_NEARBY_LIMIT, OVERPASS_GRID_TIMEOUT_S, userAgent, WIKIDATA_SPARQL_ENDPOINT } from './config'
+import { boundaryWaysFromPbf, municipalitiesFromPbf, osmiumAvailable, pbfTimestamp, poiElementsFromPbf } from './osm-pbf'
 import { readPrevIndex, sanityCheck, writeOutput } from './output'
 import { commonsPhotoSource, type PhotoSource } from './photos'
-import { buildWikidataSparql, parseWikidataBindings, type SparqlJson, type WikidataItem } from './wikidata'
+import { buildQidDetailsSparql, buildWikidataSparql, parseQidDetails, parseWikidataBindings, QID_DETAILS_BATCH, type SparqlJson, type WikidataDetail, type WikidataItem } from './wikidata'
 
 const log = (msg: string) => console.log(`[build-poi] ${msg}`)
 
@@ -92,7 +93,7 @@ async function overpass<T>(query: string, timeoutMs: number): Promise<T> {
   throw lastError ?? new Error('all Overpass endpoints failed')
 }
 
-async function wikidata(): Promise<WikidataItem[]> {
+async function wikidata(): Promise<{ items: WikidataItem[]; p31Only: boolean }> {
   let lastError: unknown
   for (const transitive of [true, false]) {
     try {
@@ -109,13 +110,31 @@ async function wikidata(): Promise<WikidataItem[]> {
       const items = parseWikidataBindings(json)
       log(`wikidata: ${json.results?.bindings?.length ?? 0} rows → ${items.length} items`)
       if (items.length === 0) throw new Error('0 items')
-      return items
+      return { items, p31Only: !transitive }
     } catch (e) {
       lastError = e
       log(`wikidata: failed: ${String(e)}`)
     }
   }
   throw lastError instanceof Error ? lastError : new Error('Wikidata SPARQL failed')
+}
+
+/** OSM の wikidata タグの QID を VALUES で補完（v1.4 Q4）。1 バッチでも失敗したら throw */
+async function wikidataDetails(qids: string[]): Promise<Map<string, WikidataDetail>> {
+  const out = new Map<string, WikidataDetail>()
+  for (let i = 0; i < qids.length; i += QID_DETAILS_BATCH) {
+    const json = await fetchJson<SparqlJson>(
+      WIKIDATA_SPARQL_ENDPOINT,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/sparql-results+json' },
+        body: new URLSearchParams({ query: buildQidDetailsSparql(qids.slice(i, i + QID_DETAILS_BATCH)) }).toString(),
+      },
+      { timeoutMs: 60_000 },
+    )
+    for (const [k, v] of parseQidDetails(json)) out.set(k, v)
+  }
+  return out
 }
 
 /** GitHub Actions のジョブサマリーと警告注釈 */
@@ -172,6 +191,7 @@ async function main() {
       sample: { type: 'boolean', default: false },
       'min-count': { type: 'string' },
       'nearby-limit': { type: 'string' },
+      'category-photo-limit': { type: 'string' },
       'no-photos': { type: 'boolean', default: false },
       'allow-shrink': { type: 'boolean', default: false },
     },
@@ -187,16 +207,22 @@ async function main() {
   let warnings: string[] = []
   let warnStats: Record<string, number> = {}
   let osm: StaticIndex['osm']
+  let details: Map<string, WikidataDetail> | undefined
+  let municipalityOf: ((p: { lat: number; lng: number }) => string | undefined) | undefined
   if (values.fixture) {
     const dir = values.fixture
     wd = parseWikidataBindings(readJson<SparqlJson>(join(dir, 'wikidata.json')) ?? {})
     coverage = readJson<StaticCoverage>(join(dir, 'coverage.json'))
+    const det = readJson<SparqlJson>(join(dir, 'wikidata-details.json'))
+    if (det) details = parseQidDetails(det)
     const pm = readJson<Record<string, PhotoInfo>>(join(dir, 'photos.json'))
     photos = values['no-photos'] || !pm ? undefined : fixturePhotoSource(pm)
     if (values.pbf) {
       // fixture でも OSM 部分は osmium で（.osm の XML も読める）
       elements = await poiElementsFromPbf(values.pbf, { workDir, log })
       boundaryWays = await boundaryWaysFromPbf(values.pbf, { workDir })
+      const areas = await municipalitiesFromPbf(values.pbf, { workDir })
+      if (areas.length) municipalityOf = municipalityLookup(areas)
     } else {
       elements = readJson<OverpassResponse>(join(dir, 'overpass.json'))?.elements ?? []
       boundaryWays = readJson<{ elements: GeomWay[] }>(join(dir, 'boundary.json'))?.elements
@@ -215,14 +241,22 @@ async function main() {
         poi: (pbf) => poiElementsFromPbf(pbf, { workDir, log }),
         boundary: (pbf) => boundaryWaysFromPbf(pbf, { workDir }),
         timestamp: (pbf) => pbfTimestamp(pbf),
+        // bbox で切った後のファイル（osmium の 1 段目の出力）があればそれを使う
+        municipalities: (pbf) => {
+          const cut = join(workDir, 'tokyo-bbox.osm.pbf')
+          return municipalitiesFromPbf(existsSync(cut) ? cut : pbf, { workDir })
+        },
       },
       overpass: (q) => overpass<OverpassResponse>(q, (OVERPASS_GRID_TIMEOUT_S + 30) * 1000),
       overpassBoundary: async () => (await overpass<{ elements: GeomWay[] }>(buildBoundaryQuery(), 180_000)).elements,
       wikidata,
+      wikidataDetails,
       log,
     })
     ;({ elements, boundaryWays, warnings, warnStats, osm } = got)
     wd = got.wikidata
+    details = got.wikidataDetails
+    if (got.municipalities.length) municipalityOf = municipalityLookup(got.municipalities)
     photos = values['no-photos'] ? undefined : commonsPhotoSource
   }
   const { index, tiles } = await buildDataset({
@@ -232,6 +266,9 @@ async function main() {
     coverage,
     photos,
     nearbyLimit: values.fixture ? 0 : Number(values['nearby-limit'] ?? DEFAULT_NEARBY_LIMIT),
+    categoryPhotoLimit: values.fixture ? 0 : Number(values['category-photo-limit'] ?? DEFAULT_CATEGORY_PHOTO_LIMIT),
+    wikidataDetails: details,
+    municipalityOf,
     generatedAt: new Date().toISOString(),
     sample: values.sample,
     warnings,

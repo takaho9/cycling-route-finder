@@ -16,7 +16,11 @@ on:
       nearby_limit:
         description: 'Commons 近傍検索の上限件数（0 で無効）'
         type: string
-        default: '300'
+        default: '1000'
+      category_photo_limit:
+        description: 'Commons の Category: リンクから代表画像をさがす上限件数（0 で無効）'
+        type: string
+        default: '800'
       no_photos:
         description: '写真の解決をしない（Commons を叩かない）'
         type: boolean
@@ -101,7 +105,8 @@ jobs:
       - name: Build data (Geofabrik/osmium + Wikidata + Commons)
         env:
           POI_CONTACT: ${{ github.server_url }}/${{ github.repository }}/issues
-          NEARBY_LIMIT: ${{ inputs.nearby_limit || '300' }}
+          NEARBY_LIMIT: ${{ inputs.nearby_limit || '1000' }}
+          CATEGORY_PHOTO_LIMIT: ${{ inputs.category_photo_limit || '800' }}
           OSM_SOURCE: ${{ inputs.osm_source || 'auto' }}
           NO_PHOTOS: ${{ inputs.no_photos && '--no-photos' || '' }}
           ALLOW_SHRINK: ${{ inputs.allow_shrink && '--allow-shrink' || '' }}
@@ -109,7 +114,7 @@ jobs:
           TIME=""; [ -x /usr/bin/time ] && TIME="/usr/bin/time -v"
           $TIME npx tsx scripts/build-poi/main.ts --out public/data/tokyo \
             --pbf .cache/osm/kanto-latest.osm.pbf --work-dir "$RUNNER_TEMP/osm-work" --osm-source "$OSM_SOURCE" \
-            --nearby-limit "$NEARBY_LIMIT" $NO_PHOTOS $ALLOW_SHRINK 2> >(tee "$RUNNER_TEMP/build-poi.err" >&2)
+            --nearby-limit "$NEARBY_LIMIT" --category-photo-limit "$CATEGORY_PHOTO_LIMIT" $NO_PHOTOS $ALLOW_SHRINK 2> >(tee "$RUNNER_TEMP/build-poi.err" >&2)
           grep -E "Elapsed \(wall clock\)|Maximum resident set size" "$RUNNER_TEMP/build-poi.err" || true
 
       - name: Commit and push to main

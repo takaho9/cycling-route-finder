@@ -1,7 +1,7 @@
 import { bearingDeg, haversineKm } from '../geo'
 import { abortError, fetchJson, isAbortError, TimeoutError } from '../http'
 import type { Category, LatLng, Place, PlaceProvider } from '../types'
-import { isChainName, isWorshipPartName } from './quality'
+import { isChainName, isNotDestination, isShoppingStreetName, isWorshipPartName } from './quality'
 
 export const OVERPASS_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
@@ -60,6 +60,9 @@ export const OVERPASS_SELECTORS: readonly Selector[] = [
   { kinds: ['node'], filter: `["shop"~"^(confectionery|pastry|chocolate)$"]["name"]${NO_BRAND}` },
   { kinds: ['node'], filter: `["amenity"="ice_cream"]["name"]${NO_BRAND}` },
   { kinds: ['node', 'area'], filter: '["highway"~"^(services|rest_area)$"]["name"~"道の駅"]' },
+  // v1.4（BACKLOG-3 Q2 / Q4）: 動物園・テーマパーク（中の動物などは事前生成で吸収）、名前のある山頂（高尾山など）
+  { kinds: ['node', 'area'], filter: '["tourism"~"^(zoo|theme_park)$"]["name"]' },
+  { kinds: ['node'], filter: '["natural"="peak"]["name"]' },
 ]
 
 export interface BBox {
@@ -159,6 +162,12 @@ export function categorizeOsmTags(tags: Record<string, string>): Category {
     return 'sweets'
   }
   if (tags.amenity === 'place_of_worship') return 'shrine'
+  // 商店街は見どころ（v1.4 Q14。合羽橋道具街などが historic になっていた）
+  if (isShoppingStreetName(name)) return 'attraction'
+  // tourism=attraction でも、店・飲食店（shop / amenity）なら見どころにしない（v1.4 Q14）
+  if (tags.tourism === 'attraction' && (tags.shop || (tags.amenity && tags.amenity !== 'place_of_worship'))) return 'other'
+  if (tags.tourism === 'zoo' || tags.tourism === 'theme_park') return 'attraction'
+  if (tags.natural === 'peak') return 'viewpoint'
   if (tags.tourism === 'museum' || tags.tourism === 'gallery') return 'museum'
   if (tags.natural === 'beach' || tags.natural === 'coastline') return 'seaside'
   if (tags.natural === 'water' || tags.leisure === 'marina') return 'waterside'
@@ -189,6 +198,14 @@ export function bboxDiagonalM(el: OverpassElement): number {
 /** 小規模公園・チェーン店などノイズを除外（BACKLOG Y1） */
 export function isWorthVisiting(el: OverpassElement, category: Category): boolean {
   const tags = el.tags ?? {}
+  // どのカテゴリにも当たらないもの（tourism=attraction の店など, v1.4 Q14）は行き先にしない
+  if (category === 'other') return false
+  // 目的地にならないもの・立入不可（v1.4 Q3）
+  if (isNotDestination(tags['name:ja'] ?? tags.name ?? '', tags.wikidata)) return false
+  // 動物園の動物（v1.4 Q2）
+  if (tags.attraction === 'animal') return false
+  // 名前のある山頂は、知られているもの（wikidata あり）だけ（v1.4 Q4）
+  if (tags.natural === 'peak' && !tags.wikidata) return false
   if (tags.leisure === 'park' || tags.leisure === 'garden') {
     if (SMALL_PARK_NAME_RE.test(tags.name ?? '')) return false
     const notable = !!(tags.wikidata || tags.heritage)
