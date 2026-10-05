@@ -24,6 +24,8 @@ export interface SearchResult {
   isDemo: boolean
   /** true なら事前生成データのサンプル版（網羅性が無いので UI はデモ扱いで表示, v1.3） */
   sample?: boolean
+  /** 検索円のうち事前生成データの対象範囲（都内）の外にある割合（0〜1, static のときだけ。v1.4 Q10） */
+  partialCoverage?: number
   /** true ならキャッシュから */
   fromCache?: boolean
   /** フォールバックに至った各プロバイダの失敗 */

@@ -14,7 +14,8 @@
     "icons": "node scripts/gen-icons.mjs",
     "screenshots": "node scripts/screenshots.mjs",
     "build:data": "tsx scripts/build-poi/main.ts",
-    "build:data:sample": "tsx scripts/build-poi/main.ts --fixture scripts/build-poi/fixtures/sample --sample"
+    "build:data:sample": "tsx scripts/build-poi/main.ts --fixture scripts/build-poi/fixtures/sample --sample",
+    "sim": "tsx scripts/sim-recommendations.mts"
   },
   "dependencies": {
     "@fontsource/outfit": "^5.3.0",

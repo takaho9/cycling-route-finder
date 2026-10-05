@@ -7,7 +7,12 @@ import type { Category, ElevationLabel, Place } from './types'
 /**
  * 全候補（1 回の検索結果）から、選んだ時間・速度のドーナツに入るものを選ぶ（R6: 再検索しない）。
  */
-export function selectCandidates(all: readonly Place[], roundTripMin: number, speedKmh: number, max = MAX_CANDIDATES): Place[] {
+export interface SelectOptions {
+  /** 日替わりの並び（同点の順序）に使う日付キー */
+  dateKey?: string
+}
+
+export function selectCandidates(all: readonly Place[], roundTripMin: number, speedKmh: number, max = MAX_CANDIDATES, _opts: SelectOptions = {}): Place[] {
   const r = computeReach(roundTripMin, speedKmh)
   return balancedSample(dedupeNearby(filterDonut(all, r.minKm, r.bandMaxKm)), max)
 }
