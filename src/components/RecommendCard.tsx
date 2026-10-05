@@ -57,7 +57,7 @@ export function RecommendCard({
         <a className="btn btn--primary rec-card__go pressable" href={goHref} target="_blank" rel="noopener" onClick={() => onGo(place)}>
           🚲 {goLabel} <span className="arrow">→</span>
         </a>
-        {demo && <p className="demo-note">※ デモの架空の場所だよ。地図は開けるけど実在しないかも</p>}
+        {demo && <p className="demo-note">※ デモの架空の場所（実在しないかも）</p>}
       </div>
     </article>
   )

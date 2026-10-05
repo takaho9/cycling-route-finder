@@ -1,129 +1,353 @@
-// 仮の最小 UI。docs/DESIGN.md 確定後に作り直す前提。
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { fetchElevationSummaries } from './lib/elevation'
-import { buildOneWayUrl, buildRoundTripUrl, googlePlaceIdFromId } from './lib/gmaps'
-import { searchPlaces, type SearchResult } from './lib/places'
-import { computeReach, estimateRoundTripMin, formatMinutesJa, ROUND_TRIP_MINUTES, SPEED_PRESETS, type SpeedPresetId } from './lib/reach'
-import { loadSettings, saveSettings } from './lib/storage'
-import type { ElevationSummary, LatLng } from './lib/types'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { DemoPill, OfflineStrip } from './components/Banners'
+import { DetailSheet } from './components/DetailSheet'
+import { GachaOverlay } from './components/GachaOverlay'
+import { AppHeader } from './components/Header'
+import { HomeView } from './components/HomeView'
+import { OriginSheet } from './components/OriginSheet'
+import type { CardMetrics } from './components/PlaceCard'
+import { RecordsSheet } from './components/RecordsSheet'
+import { ResultsView, type FilterState } from './components/ResultsView'
+import { ReturnCard } from './components/ReturnCard'
+import { SettingsSheet } from './components/SettingsSheet'
+import { Toast, type ToastMsg } from './components/Toast'
+import type { RouteMode, ViewPlace } from './components/types'
+import { useEnrichment, useVisibility } from './hooks/useEnrichment'
+import { rideToast, useHabits, type RidePlace } from './hooks/useHabits'
+import { useOnline, useReducedMotion, vibrate } from './hooks/useMedia'
+import { DEMO_ORIGIN, useOrigin } from './hooks/useOrigin'
+import { usePlaceSearch } from './hooks/usePlaceSearch'
+import { categoriesIn, filterAndSort, pickRecommendations, selectCandidates } from './lib/candidates'
+import { buildOneWayUrl, buildRoundTripUrl } from './lib/gmaps'
+import { FALLBACK_MESSAGES } from './lib/places'
+import { estimateRoundTripMin, formatMinutesJa, roadBudgetKm, roadKmEstimate, ROUND_TRIP_MINUTES, SPEED_PRESETS } from './lib/reach'
+import { demoServices, isDemoMode, realServices, type Services } from './lib/services'
+import { loadFlag, loadSettings, saveSettings, setFlag, shouldAskReturn, type Settings } from './lib/storage'
+import { daylightStatus } from './lib/sun'
+import type { ElevationSummary } from './lib/types'
 
-export const DEMO_LOCATION: LatLng = { lat: 35.681236, lng: 139.767125 } // 東京駅
+type Screen = 'home' | 'results'
+type SheetKind = 'records' | 'settings' | 'origin' | null
 
-const LABEL_JA: Record<ElevationSummary['label'], string> = { flat: 'フラット', rolling: 'ゆるアップダウン', hilly: 'ヒルクライム' }
+const DEFAULT_FILTER: FilterState = { elevation: 'all', categories: new Set(), sort: 'near' }
 
-export default function App() {
-  const [origin, setOrigin] = useState<LatLng>(DEMO_LOCATION)
-  const [locStatus, setLocStatus] = useState<'locating' | 'gps' | 'demo'>('locating')
-  const [minutes, setMinutes] = useState<number | null>(null)
-  const [speed, setSpeed] = useState<SpeedPresetId>(() => loadSettings().speedPreset)
-  const [result, setResult] = useState<SearchResult | null>(null)
-  const [elev, setElev] = useState<Map<string, ElevationSummary | null>>(new Map())
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const abortRef = useRef<AbortController | null>(null)
+function indexOfMinutes(min: number): number {
+  const i = ROUND_TRIP_MINUTES.indexOf(min as (typeof ROUND_TRIP_MINUTES)[number])
+  return i >= 0 ? i : 2
+}
 
+const systemNow = () => new Date()
+
+export default function App({ services: injected, now = systemNow }: { services?: Services; now?: () => Date } = {}) {
+  const services = useMemo(() => injected ?? (isDemoMode() ? demoServices : realServices), [injected])
+  const reduced = useReducedMotion()
+  const online = useOnline()
+
+  // ---- settings
+  const [settings, setSettings] = useState<Settings>(() => loadSettings())
+  const updateSettings = useCallback((patch: Partial<Settings>) => {
+    setSettings((s) => {
+      const next = { ...s, ...patch }
+      saveSettings(next)
+      return next
+    })
+  }, [])
+  const kmh = SPEED_PRESETS[settings.speedPreset].kmh
+  const index = indexOfMinutes(settings.lastMinutes)
+  const minutes = ROUND_TRIP_MINUTES[index]
+  const [firstRun] = useState(() => !loadFlag('welcomed'))
+  useEffect(() => setFlag('welcomed'), [])
+
+  // ---- origin / search / enrichment
+  const { origin, status: locStatus, locate, choose } = useOrigin(services)
+  const search = usePlaceSearch(services, origin, online)
+  const all = search.result?.places
+  const candidates = useMemo(() => (all ? selectCandidates(all, minutes, kmh) : []), [all, minutes, kmh])
+  const { elevations, photos, markVisible, setElevation } = useEnrichment(services, origin, candidates)
+  const observe = useVisibility(markVisible)
+
+  // ---- habits
+  const habits = useHabits(settings.weeklyGoal, now)
+  const [bump, setBump] = useState(0)
+  const [stampKey, setStampKey] = useState(0)
+
+  const views: ViewPlace[] = useMemo(
+    () =>
+      candidates.map((p) => {
+        const e = elevations.get(p.id)
+        const elevation: ElevationSummary | undefined = e ?? p.elevation
+        return {
+          ...p,
+          elevation,
+          elevationState: elevation ? 'ready' : elevations.has(p.id) ? 'none' : 'loading',
+          photo: photos.has(p.id) ? (photos.get(p.id) ?? null) : undefined,
+          visited: habits.visited.has(p.id),
+          favorite: habits.favoriteIds.has(p.id),
+        }
+      }),
+    [candidates, elevations, photos, habits.visited, habits.favoriteIds],
+  )
+
+  // ---- filter / list
+  const [filter, setFilter] = useState<FilterState>(DEFAULT_FILTER)
+  const [seed] = useState(() => Math.floor(Math.random() * 2 ** 31))
+  const list = useMemo(
+    () => filterAndSort(views, { ...filter, visited: habits.visited, seed }),
+    [views, filter, habits.visited, seed],
+  )
+  const recs = useMemo(
+    () => pickRecommendations(views, { dateKey: habits.todayKey, visited: habits.visited }),
+    [views, habits.todayKey, habits.visited],
+  )
+  const available = useMemo(() => categoriesIn(views), [views])
+
+  // ---- screens / overlays
+  const [screen, setScreen] = useState<Screen>('home')
+  const [showAll, setShowAll] = useState(false)
+  const [sheet, setSheet] = useState<SheetKind>(null)
+  const [gacha, setGacha] = useState<ViewPlace[] | null>(null)
+  const [detail, setDetail] = useState<ViewPlace | null>(null)
+  const [mode, setMode] = useState<RouteMode>('round')
+  const [toast, setToast] = useState<ToastMsg | null>(null)
+  const say = useCallback((text: string) => setToast({ id: Date.now() + Math.random(), text }), [])
+  const clearToast = useCallback(() => setToast(null), [])
+
+  // ブラウザの「戻る」で一覧 → ホーム
   useEffect(() => {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      setLocStatus('demo')
+    const onPop = () => setScreen('home')
+    addEventListener('popstate', onPop)
+    return () => removeEventListener('popstate', onPop)
+  }, [])
+  const goResults = () => {
+    if (!origin) {
+      setSheet('origin')
       return
     }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setOrigin({ lat: pos.coords.latitude, lng: pos.coords.longitude })
-        setLocStatus('gps')
-      },
-      () => setLocStatus('demo'),
-      { enableHighAccuracy: false, timeout: 8000, maximumAge: 60_000 },
-    )
-  }, [])
+    try {
+      history.pushState({ screen: 'results' }, '')
+    } catch {
+      /* ignore */
+    }
+    setScreen('results')
+    scrollTo?.({ top: 0 })
+  }
+  const goHome = () => {
+    if (history.state?.screen === 'results') history.back()
+    else setScreen('home')
+  }
 
-  useEffect(() => {
-    saveSettings({ speedPreset: speed })
-  }, [speed])
+  const roundAllowed = origin?.kind !== 'demo'
+  const effectiveMode: RouteMode = roundAllowed ? mode : 'oneway'
+  const metricsOf = useCallback(
+    (p: ViewPlace): CardMetrics => ({
+      km: roadKmEstimate(p.distanceKm),
+      min: estimateRoundTripMin(p.distanceKm, kmh, { gainRoundTripM: p.elevation?.gainRoundTripM ?? 0 }),
+    }),
+    [kmh],
+  )
+  const goHrefOf = (p: ViewPlace) =>
+    effectiveMode === 'round' && origin ? buildRoundTripUrl({ start: origin, destination: p }) : buildOneWayUrl({ destination: p })
+  const asRide = (p: { id: string; name: string; category: RidePlace['category'] }): RidePlace => ({ id: p.id, name: p.name, category: p.category })
+  const onGo = (p: ViewPlace) => habits.depart(asRide(p), metricsOf(p).min)
 
-  const kmh = SPEED_PRESETS[speed].kmh
-  const reach = useMemo(() => (minutes ? computeReach(minutes, kmh) : null), [minutes, kmh])
+  const openGacha = () => {
+    if (!origin) {
+      setSheet('origin')
+      return
+    }
+    if (search.status === 'loading' || search.status === 'idle') {
+      say('いま行き先をさがし中… ちょっと待ってね 🚲')
+      return
+    }
+    const pool = screen === 'results' && showAll ? list : views
+    if (pool.length === 0) {
+      say('今の条件だと候補がないみたい。フィルタをゆるめてみよう')
+      return
+    }
+    setGacha([...pool])
+  }
 
-  useEffect(() => {
-    if (!reach || locStatus === 'locating') return
-    abortRef.current?.abort()
-    const ac = new AbortController()
-    abortRef.current = ac
-    setLoading(true)
-    setError(null)
-    setResult(null)
-    setElev(new Map())
-    searchPlaces(origin, reach.minKm, reach.bandMaxKm, { signal: ac.signal })
-      .then(async (r) => {
-        setResult(r)
-        setLoading(false)
-        const need = r.places.filter((p) => !p.elevation)
-        if (need.length) setElev(await fetchElevationSummaries(origin, need, { signal: ac.signal }))
-      })
-      .catch((e: unknown) => {
-        if (ac.signal.aborted) return
-        setError(String(e))
-        setLoading(false)
-      })
-    return () => ac.abort()
-  }, [origin, reach, locStatus])
+  const celebrate = (text: string, added: boolean) => {
+    say(text)
+    if (added) {
+      setBump((b) => b + 1)
+      vibrate(12, reduced)
+    }
+  }
+
+  const onRode = (p: ViewPlace, when: 'today' | 'yesterday') => {
+    const r = habits.toggleRide(asRide(p), Math.round(metricsOf(p).min), when)
+    if (r.kind === 'added' && when === 'today') setStampKey((k) => k + 1)
+    celebrate(rideToast(r, p.name), r.kind === 'added')
+  }
+
+  const answerReturn = (rode: boolean) => {
+    const name = habits.departure?.name ?? ''
+    const r = habits.answerReturn(rode)
+    if (r) celebrate(rideToast(r, name), true)
+    else if (!rode) say('また今度いこう。いつでも待ってるよ')
+  }
+
+  const daylight = useMemo(() => (origin ? daylightStatus(now(), origin, minutes) : null), [origin, minutes, now])
+  const returnCard =
+    habits.departure && shouldAskReturn(habits.departure, now()) ? (
+      <ReturnCard departure={habits.departure} onYes={() => answerReturn(true)} onNo={() => answerReturn(false)} />
+    ) : null
+
+  // 詳細はいま表示中のデータ（写真・標高の追加ロード後）を優先
+  const detailView = detail ? (views.find((v) => v.id === detail.id) ?? detail) : null
+  const isDemo = !!search.result?.isDemo || services.demo
+  const demoReason = search.reason ? FALLBACK_MESSAGES[search.reason] : null
 
   return (
-    <main style={{ maxWidth: 640, margin: '0 auto', padding: 16, fontFamily: 'system-ui, sans-serif' }}>
-      <h1 style={{ fontSize: 20 }}>ちょいチャリ（仮UI）</h1>
-      <p style={{ fontSize: 12, color: '#666' }}>
-        現在地: {locStatus === 'gps' ? 'GPS' : locStatus === 'demo' ? 'デモ地点（東京駅）' : '取得中…'}
-      </p>
-      <div role="group" aria-label="速度" style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-        {Object.values(SPEED_PRESETS).map((p) => (
-          <button key={p.id} aria-pressed={speed === p.id} onClick={() => setSpeed(p.id)}>
-            {p.label} {p.kmh}km/h
-          </button>
-        ))}
-      </div>
-      <div role="group" aria-label="往復時間" style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-        {ROUND_TRIP_MINUTES.map((m) => (
-          <button key={m} aria-pressed={minutes === m} onClick={() => setMinutes(m)} style={{ minHeight: 44 }}>
-            {formatMinutesJa(m)}
-          </button>
-        ))}
-      </div>
-      {reach && (
-        <p style={{ fontSize: 12 }}>
-          片道 {reach.minKm.toFixed(1)}〜{reach.bandMaxKm.toFixed(1)} km（直線）
-        </p>
-      )}
-      {loading && <p>探しています…</p>}
-      {error && <p role="alert">取得に失敗しました: {error}</p>}
-      {result && (
+    <div className={`app app--${screen}`}>
+      <a className="skip-link" href="#main">
+        本文へ
+      </a>
+      {!online && <OfflineStrip stale={search.stale} />}
+      <AppHeader
+        streak={habits.streak}
+        bump={bump}
+        onRecords={() => setSheet('records')}
+        onSettings={() => setSheet('settings')}
+        onBack={screen === 'results' ? goHome : undefined}
+        summary={
+          <>
+            <span className="num">{formatMinutesJa(minutes)}</span> · 片道<span className="num">{roadBudgetKm(minutes, kmh).toFixed(1)}km</span>
+          </>
+        }
+        onGacha={screen === 'results' ? openGacha : undefined}
+      />
+
+      {screen === 'home' ? (
         <>
-          <p style={{ fontSize: 12 }}>
-            {result.places.length}件 / source: {result.source}
-            {result.isDemo && '（デモデータ）'}
-          </p>
-          <ul style={{ listStyle: 'none', padding: 0 }}>
-            {result.places.map((p) => {
-              const e = p.elevation ?? elev.get(p.id) ?? null
-              const placeId = googlePlaceIdFromId(p.id)
-              return (
-                <li key={p.id} style={{ borderBottom: '1px solid #ddd', padding: '8px 0' }}>
-                  <strong>{p.name}</strong> <small>[{p.category}]</small>
-                  <div style={{ fontSize: 12 }}>
-                    片道 {p.distanceKm.toFixed(1)}km ・ 往復約 {formatMinutesJa(estimateRoundTripMin(p.distanceKm, kmh))}
-                    {e && ` ・ 獲得標高 ${Math.round(e.gainRoundTripM)}m（${LABEL_JA[e.label]}）最大勾配 ${e.maxGradePct}%`}
-                  </div>
-                  <a href={buildOneWayUrl({ origin, destination: p, destinationPlaceId: placeId })} target="_blank" rel="noreferrer">
-                    片道ナビ
-                  </a>{' '}
-                  <a href={buildRoundTripUrl({ origin, destination: p, destinationPlaceId: placeId })} target="_blank" rel="noreferrer">
-                    往復ナビ
-                  </a>
-                </li>
-              )
-            })}
-          </ul>
+          <HomeView
+            top={returnCard}
+            origin={origin}
+            locStatus={locStatus}
+            onChangeOrigin={() => setSheet('origin')}
+            onDemoOrigin={() => choose(DEMO_ORIGIN)}
+            index={index}
+            onIndex={(i) => {
+              updateSettings({ lastMinutes: ROUND_TRIP_MINUTES[i] })
+              vibrate(8, reduced)
+            }}
+            oneWayKm={roadBudgetKm(minutes, kmh)}
+            speed={settings.speedPreset}
+            onSpeedTap={() => setSheet('settings')}
+            daylight={daylight}
+            firstRun={firstRun}
+            demo={isDemo && origin && search.status !== 'loading' ? <DemoPill reason={demoReason} /> : null}
+          />
+          <div className="bottom-bar">
+            <div className="bottom-bar__row">
+              <button type="button" className="btn btn--secondary bottom-bar__gacha pressable" onClick={openGacha}>
+                <span aria-hidden="true">🎲</span> おまかせ
+              </button>
+              <button type="button" className="btn btn--primary bottom-bar__go pressable" onClick={goResults}>
+                候補を見る <span className="arrow">→</span>
+              </button>
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          <ResultsView
+            top={returnCard}
+            status={search.status}
+            total={views.length}
+            recs={recs}
+            list={list}
+            showAll={showAll}
+            onShowAll={() => setShowAll(true)}
+            filter={filter}
+            onFilter={setFilter}
+            available={available}
+            isDemo={isDemo}
+            demoReason={demoReason}
+            metricsOf={metricsOf}
+            goHrefOf={goHrefOf}
+            goLabel="Googleマップで出発"
+            onGo={onGo}
+            onOpen={(p) => setDetail(p)}
+            onToggleFavorite={(p) => habits.toggleFav(p)}
+            observe={observe}
+            onRetry={search.retry}
+            onAddTime={() => updateSettings({ lastMinutes: ROUND_TRIP_MINUTES[Math.min(index + 1, ROUND_TRIP_MINUTES.length - 1)] })}
+            canAddTime={index < ROUND_TRIP_MINUTES.length - 1}
+            onChangeOrigin={() => setSheet('origin')}
+          />
+          <button type="button" className="fab pressable" onClick={openGacha} aria-label="おまかせ（ガチャ）">
+            <span aria-hidden="true">🎲</span>
+          </button>
         </>
       )}
-    </main>
+
+      {detailView && origin && (
+        <DetailSheet
+          place={detailView}
+          origin={origin}
+          roundTripAllowed={roundAllowed}
+          services={services}
+          speedKmh={kmh}
+          minutes={minutes}
+          mode={effectiveMode}
+          onMode={setMode}
+          rodeToday={habits.rides.some((r) => r.placeId === detailView.id && r.date === habits.todayKey)}
+          rodeYesterday={habits.rides.some((r) => r.placeId === detailView.id && r.date === habits.yesterdayKey)}
+          stampKey={stampKey}
+          onRode={onRode}
+          onGo={(p) => onGo(p)}
+          onToggleFavorite={(p) => habits.toggleFav(p)}
+          onRouteElevation={setElevation}
+          onClose={() => setDetail(null)}
+        />
+      )}
+
+      {gacha && (
+        <GachaOverlay
+          pool={gacha}
+          metricsOf={metricsOf}
+          reduced={reduced}
+          onDecide={(p) => {
+            setGacha(null)
+            setDetail(p)
+          }}
+          onClose={() => setGacha(null)}
+        />
+      )}
+
+      <RecordsSheet
+        open={sheet === 'records'}
+        onClose={() => setSheet(null)}
+        rides={habits.rides}
+        stamps={habits.stamps}
+        streak={habits.streak}
+        best={habits.best}
+        weekCount={habits.weekCount}
+        weeklyGoal={settings.weeklyGoal}
+        today={habits.today}
+        onDeleteRide={habits.deleteRide}
+      />
+      <SettingsSheet
+        open={sheet === 'settings'}
+        onClose={() => setSheet(null)}
+        speed={settings.speedPreset}
+        onSpeed={(speedPreset) => updateSettings({ speedPreset })}
+        weeklyGoal={settings.weeklyGoal}
+        onWeeklyGoal={(weeklyGoal) => updateSettings({ weeklyGoal })}
+        origin={origin}
+        onChangeOrigin={() => setSheet('origin')}
+      />
+      <OriginSheet
+        open={sheet === 'origin'}
+        onClose={() => setSheet(null)}
+        services={services}
+        canLocate={typeof navigator !== 'undefined' && !!navigator.geolocation}
+        onLocate={locate}
+        onChoose={choose}
+      />
+      <Toast toast={toast} onDone={clearToast} />
+    </div>
   )
 }

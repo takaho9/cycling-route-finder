@@ -86,7 +86,8 @@ export function DetailSheet({
   const cat = CATEGORY_META[place.category]
   const elev = route.elevation ?? place.elevation
   const routed = route.route?.source === 'osrm'
-  const oneWayKm = route.route ? route.route.distanceKm : roadKmEstimate(place.distanceKm)
+  // 経路が取れたときだけ実距離。直線フォールバック時は一覧と同じく迂回係数を掛けた目安にそろえる
+  const oneWayKm = routed && route.route ? route.route.distanceKm : roadKmEstimate(place.distanceKm)
   const round = effectiveMode === 'round'
   const km = round ? oneWayKm * 2 : oneWayKm
   const gain = elev ? (round ? elev.gainRoundTripM : elev.climbM) : null

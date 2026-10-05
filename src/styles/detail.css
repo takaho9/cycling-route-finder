@@ -1,0 +1,285 @@
+/* 詳細ボトムシート（DESIGN §3.3） */
+.detail .sheet__close {
+  top: 32px;
+  right: 24px;
+  background: var(--c-pill-on-photo);
+  color: var(--c-pill-on-photo-text);
+  box-shadow: var(--sh-1);
+}
+.detail__photo {
+  position: relative;
+  height: 220px;
+  margin: 0 0 var(--sp-4);
+  overflow: hidden;
+  border-radius: var(--r-lg);
+}
+.detail .sheet__title {
+  margin-right: 0;
+  margin-bottom: var(--sp-3);
+}
+.detail__fav {
+  position: absolute;
+  top: var(--sp-2);
+  right: 60px;
+  z-index: 2;
+  background: var(--c-pill-on-photo);
+  color: var(--c-pill-on-photo-text);
+  box-shadow: var(--sh-1);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-radius: var(--r-md);
+  background: var(--c-surface-2);
+  padding: var(--sp-3) var(--sp-1);
+}
+.stats__cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  text-align: center;
+}
+.stats__cell + .stats__cell {
+  box-shadow: -1px 0 0 var(--c-border);
+}
+.stats__num {
+  font-size: var(--fs-display);
+  line-height: 1.1;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.stats__num small {
+  margin-left: 2px;
+  font-size: var(--fs-sub);
+  font-weight: 600;
+  color: var(--c-text-sub);
+}
+.stats__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--c-text-sub);
+  font-size: var(--fs-caption);
+  font-weight: 500;
+}
+.stats__cell--flat .stats__num,
+.stats__cell--flat .stats__label {
+  color: var(--c-flat-ink);
+}
+.stats__cell--rolling .stats__num,
+.stats__cell--rolling .stats__label {
+  color: var(--c-rolling-ink);
+}
+.stats__cell--hilly .stats__num,
+.stats__cell--hilly .stats__label {
+  color: var(--c-hill-ink);
+}
+.detail__note {
+  margin-top: var(--sp-2);
+  color: var(--c-text-sub);
+  font-size: var(--fs-caption);
+}
+.detail__warn {
+  margin-top: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-md);
+  background: var(--c-gold-soft);
+  font-size: var(--fs-sub);
+}
+.detail__section {
+  margin-top: var(--sp-5);
+}
+.detail__section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: var(--sp-2);
+}
+.detail__section-head h3 {
+  font-size: var(--fs-body);
+  font-weight: 700;
+}
+.detail__section-head .num {
+  color: var(--c-text-sub);
+  font-size: var(--fs-sub);
+}
+.detail__elev-sub {
+  margin-top: var(--sp-1);
+  color: var(--c-text-sub);
+  font-size: var(--fs-sub);
+}
+.detail__muted {
+  margin-top: var(--sp-2);
+  color: var(--c-text-sub);
+  font-size: var(--fs-sub);
+}
+.detail__rode {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-5);
+}
+.detail__rode .btn--outline {
+  flex: 1 1 auto;
+}
+.detail__go {
+  width: 100%;
+}
+.detail__sublinks {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  margin-top: var(--sp-1);
+  font-size: var(--fs-sub);
+}
+.detail__sublinks a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  font-weight: 700;
+}
+.detail__sublinks .demo-note {
+  margin: 0;
+  text-align: right;
+}
+
+/* 片道/往復 セグメント */
+.segment {
+  display: flex;
+  gap: 4px;
+  margin-top: var(--sp-5);
+  padding: 4px;
+  border-radius: var(--r-md);
+  background: var(--c-surface-2);
+}
+.segment__btn {
+  flex: 1;
+  min-height: var(--tap);
+  border-radius: 12px;
+  color: var(--c-text-sub);
+  font-weight: 700;
+  transition: background-color var(--dur-base) var(--ease-out);
+}
+.segment__btn.is-on {
+  background: var(--c-accent-strong);
+  color: var(--c-on-accent);
+}
+.segment__btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* 標高プロファイル */
+.elev-profile {
+  position: relative;
+  margin: 0;
+  padding-left: 40px;
+}
+.elev-profile--flat {
+  color: var(--c-flat-ink);
+}
+.elev-profile--rolling {
+  color: var(--c-rolling-ink);
+}
+.elev-profile--hilly {
+  color: var(--c-hill-ink);
+}
+.elev-profile__axis {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 120px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: var(--c-text-sub);
+  font-size: var(--fs-caption);
+}
+.elev-profile__svg {
+  display: block;
+  width: 100%;
+  height: 120px;
+  border-radius: var(--r-xs);
+  background: var(--c-surface-2);
+  touch-action: pan-y;
+}
+.elev-profile__line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: draw var(--dur-slow) var(--ease-out) forwards;
+}
+.elev-profile__turn {
+  stroke: var(--c-text-sub);
+  stroke-dasharray: 4 4;
+  stroke-width: 1;
+}
+.elev-profile__cursor {
+  stroke: var(--c-text);
+  stroke-width: 1;
+}
+.elev-profile__tip {
+  position: absolute;
+  top: -6px;
+  transform: translate(-50%, -100%);
+  padding: 2px 8px;
+  border-radius: var(--r-sm);
+  background: var(--c-toast-bg);
+  color: var(--c-toast-text);
+  font-size: var(--fs-caption);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.elev-profile__x {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  color: var(--c-text-sub);
+  font-size: var(--fs-caption);
+}
+.elev-profile__note {
+  margin-top: 2px;
+  text-align: right;
+  color: var(--c-text-sub);
+  font-size: var(--fs-caption);
+}
+
+/* 「走った！」スタンプ押印 */
+.stamp-drop {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  margin: -48px 0 0 -48px;
+  border-radius: 50%;
+  background: var(--c-surface);
+  box-shadow:
+    inset 0 0 0 4px var(--c-gold),
+    inset 0 0 0 7px var(--c-surface),
+    inset 0 0 0 8px var(--c-gold),
+    var(--sh-2);
+  font-size: 44px;
+  animation: stamp-in 300ms var(--ease-spring) both;
+}
+@keyframes stamp-in {
+  from {
+    opacity: 0;
+    transform: translateY(-60px) scale(1.4) rotate(-12deg);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(-6deg);
+  }
+}

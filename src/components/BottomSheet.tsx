@@ -61,10 +61,12 @@ export function BottomSheet({
   const onMove = (e: React.PointerEvent) => {
     if (start.current !== null) setDrag(e.clientY - start.current)
   }
+  const toggle = () => setLevel((l) => (l === 'half' ? 'full' : 'half'))
   const onUp = () => {
     if (start.current === null) return
     start.current = null
-    if (drag > 120) {
+    if (Math.abs(drag) < 6) toggle()
+    else if (drag > 120) {
       if (level === 'full' && drag < 320) setLevel('half')
       else onClose()
     } else if (drag < -60) setLevel('full')
@@ -81,7 +83,22 @@ export function BottomSheet({
         aria-labelledby="sheet-title"
         style={drag ? { transform: `translateY(${Math.max(-40, drag)}px)`, transition: 'none' } : undefined}
       >
-        <div className="sheet__grab" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
+        <div
+          className="sheet__grab"
+          role="button"
+          tabIndex={0}
+          aria-label={level === 'half' ? 'シートを広げる' : 'シートを縮める'}
+          onPointerDown={onDown}
+          onPointerMove={onMove}
+          onPointerUp={onUp}
+          onPointerCancel={onUp}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              toggle()
+            }
+          }}
+        >
           <span className="sheet__grabber" aria-hidden="true" />
         </div>
         <button type="button" className="sheet__close icon-btn pressable" onClick={onClose} aria-label="閉じる">

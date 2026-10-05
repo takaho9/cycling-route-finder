@@ -1,0 +1,209 @@
+/* 設定・出発地シート */
+.set-section {
+  margin-top: var(--sp-6);
+}
+.set-section:first-child {
+  margin-top: 0;
+}
+.set-section__title {
+  margin-bottom: var(--sp-1);
+  font-size: var(--fs-body);
+  font-weight: 700;
+}
+.set-section__desc {
+  margin-bottom: var(--sp-3);
+  color: var(--c-text-sub);
+  font-size: var(--fs-sub);
+}
+.set-section__note {
+  margin-top: var(--sp-3);
+  padding: var(--sp-3);
+  border-radius: var(--r-md);
+  background: var(--c-surface-2);
+  font-size: var(--fs-sub);
+}
+.speed-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-2);
+}
+.speed-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--sp-3) var(--sp-1);
+  border-radius: var(--r-md);
+  background: var(--c-surface-2);
+}
+.speed-option.is-on {
+  background: var(--c-accent-strong);
+  color: var(--c-on-accent);
+}
+.speed-option__label {
+  font-size: var(--fs-sub);
+  font-weight: 700;
+}
+.speed-option__kmh {
+  font-size: 26px;
+  line-height: 1.1;
+  font-weight: 800;
+}
+.speed-option__kmh small {
+  margin-left: 2px;
+  font-size: var(--fs-caption);
+  font-weight: 600;
+}
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  margin-top: var(--sp-2);
+}
+.stepper__btn {
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  border-radius: 50%;
+  background: var(--c-surface-2);
+  font-size: 22px;
+  font-weight: 700;
+}
+.stepper__btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.stepper__value {
+  min-width: 88px;
+  text-align: center;
+  font-weight: 700;
+}
+.stepper__value .num {
+  font-size: 26px;
+  font-weight: 800;
+}
+.set-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  width: 100%;
+  min-height: 52px;
+  margin-top: var(--sp-2);
+  padding: 0 var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--c-surface-2);
+  text-align: left;
+}
+.set-row > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.set-row__go {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--c-accent-ink);
+  font-weight: 700;
+  font-size: var(--fs-sub);
+}
+.credits,
+.privacy {
+  display: grid;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+.credits li,
+.privacy li {
+  display: grid;
+  gap: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-md);
+  background: var(--c-surface-2);
+}
+.credits__role,
+.privacy__what {
+  color: var(--c-text-sub);
+  font-size: var(--fs-caption);
+}
+.credits a {
+  font-size: var(--fs-sub);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.privacy__host {
+  font-size: var(--fs-sub);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.settings__version {
+  margin-top: var(--sp-6);
+  color: var(--c-text-sub);
+  font-size: var(--fs-caption);
+  text-align: center;
+}
+
+/* 出発地 */
+.origin__search {
+  display: flex;
+  gap: var(--sp-2);
+}
+.origin__search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 48px;
+  padding: 0 var(--sp-4);
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--c-surface-2);
+  font-size: var(--fs-body);
+}
+.origin__search input::placeholder {
+  color: var(--c-text-sub);
+}
+.origin__search .btn {
+  min-height: 48px;
+}
+.origin__msg {
+  margin-top: var(--sp-2);
+  color: var(--c-text-sub);
+  font-size: var(--fs-sub);
+}
+.origin__quick {
+  display: grid;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+}
+.origin__heading {
+  margin: var(--sp-5) 0 var(--sp-2);
+  color: var(--c-text-sub);
+  font-size: var(--fs-sub);
+  font-weight: 700;
+}
+.origin__list {
+  display: grid;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+.origin__list--grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.origin__item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--c-surface-2);
+  text-align: left;
+  font-weight: 500;
+}
+.origin__credit {
+  margin-top: var(--sp-5);
+  color: var(--c-text-sub);
+  font-size: var(--fs-caption);
+}

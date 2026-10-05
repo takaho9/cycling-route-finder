@@ -337,7 +337,11 @@ reduce-motion: ステップ1〜3を省略し、結果カードをフェード表
 | `historic` | 史跡・名所 | 🏯 | `#7A5C3E → #D4B483` | historic=* |
 | `museum` | ミュージアム | 🖼 | `#6C4AB6 → #C3A6FF` | tourism=museum, gallery |
 | `sweets` | 甘いもの | 🍦 | `#FF6FA5 → #FFC2D8` | shop=confectionery, amenity=ice_cream |
+| `attraction` | 見どころ | ✨ | `#00796B → #FFD54F` | tourism=attraction（庭園・滝・名木など） |
+| `roadside_station` | 道の駅 | 🚏 | `#5A7D2A → #E8D36A` | highway=services/rest_area かつ name に「道の駅」 |
 | `other` | ぶらり | 🚲 | `#FF5A1F → #FFB800` | 上記以外 |
+
+※ カテゴリ定義はコード側（`src/lib/categories.ts`）が正（BACKLOG Y10）。`attraction` / `roadside_station` はコードに合わせて追記。
 
 - 文字は全て白＋`--c-photo-overlay` で可読性確保（どのグラデでも同じ扱い）。
 - カテゴリ絵文字・表示名はフィルタチップ、カテゴリピル、スタンプで共通利用（単一の定義テーブルから参照）。

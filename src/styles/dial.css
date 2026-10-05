@@ -1,0 +1,113 @@
+/* 半円タイムダイヤル（DESIGN §3.1） */
+.dial {
+  position: relative;
+  width: min(100vw - 32px, 360px);
+  margin: 0 auto;
+  border-radius: var(--r-lg);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.dial__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  cursor: pointer;
+}
+.dial__track,
+.dial__progress {
+  fill: none;
+  stroke-width: 20;
+  stroke-linecap: round;
+}
+.dial__track {
+  stroke: var(--c-surface-2);
+}
+.dial__progress {
+  stroke: url(#dial-grad);
+  transition: d var(--dur-base) var(--ease-out);
+}
+.dial__progress-dot {
+  fill: var(--g-hero-1);
+}
+.dial__stop1 {
+  stop-color: var(--g-hero-1);
+}
+.dial__stop2 {
+  stop-color: var(--g-hero-2);
+}
+.dial__stop3 {
+  stop-color: var(--g-hero-3);
+}
+.dial__tick {
+  fill: var(--c-text-sub);
+  opacity: 0.5;
+}
+.dial__tick.is-on {
+  fill: var(--c-white);
+  opacity: 1;
+}
+.dial__label {
+  fill: var(--c-text-sub);
+  font-size: 15px;
+  font-weight: 600;
+}
+.dial__label.is-current {
+  fill: var(--c-primary-ink);
+  font-weight: 800;
+}
+.dial__knob {
+  fill: var(--c-white);
+  filter: drop-shadow(0 4px 10px rgba(28, 27, 26, 0.25));
+  transition:
+    cx var(--dur-base) var(--ease-spring),
+    cy var(--dur-base) var(--ease-spring);
+}
+.dial__knob-icon {
+  font-size: 22px;
+  pointer-events: none;
+}
+.dial__center {
+  position: absolute;
+  left: 50%;
+  bottom: 2%;
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.dial__value {
+  display: inline-block;
+  font-size: var(--fs-hero);
+  line-height: 1;
+  font-weight: 800;
+  animation: dial-roll var(--dur-base) var(--ease-out);
+}
+.dial__unit {
+  font-size: var(--fs-body);
+  font-weight: 700;
+  color: var(--c-text-sub);
+}
+@keyframes dial-roll {
+  from {
+    opacity: 0;
+    transform: translateY(40%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dial__value {
+    animation-name: fade-in;
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}

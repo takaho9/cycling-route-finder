@@ -18,6 +18,14 @@ body {
   font-size: var(--fs-body);
   line-height: 1.6;
   overscroll-behavior-y: none;
+  overflow-x: hidden;
+}
+
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 h1,
@@ -43,7 +51,21 @@ button {
 }
 
 a {
-  color: var(--c-accent);
+  color: var(--c-accent-ink);
+}
+
+.skip-link {
+  position: absolute;
+  left: var(--sp-2);
+  top: -100px;
+  z-index: 100;
+  padding: var(--sp-2) var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+  color: var(--c-text);
+}
+.skip-link:focus {
+  top: var(--sp-2);
 }
 
 :focus-visible {
@@ -95,7 +117,9 @@ a {
   background: var(--c-primary);
   color: var(--c-on-primary);
   box-shadow: var(--sh-glow);
-  font-size: 18px;
+  /* 白×オレンジは 3.1:1 のため大きな太字（≥18.66px bold）で使う */
+  font-size: 19px;
+  letter-spacing: 0.01em;
 }
 .btn--primary:active {
   background: var(--c-primary-press);
@@ -119,6 +143,23 @@ a {
   background: none;
   color: var(--c-text-sub);
   font-weight: 500;
+}
+.btn--accent {
+  background: var(--c-accent-strong);
+  color: var(--c-on-accent);
+}
+.btn--block {
+  display: flex;
+  width: 100%;
+}
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: default;
+  box-shadow: none;
+}
+.pressable:disabled:active {
+  transform: none;
 }
 .btn .arrow {
   transition: transform var(--dur-fast) var(--ease-out);

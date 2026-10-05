@@ -4,7 +4,7 @@ import { hashString, mulberry32, pick } from '../random'
 import type { Category, LatLng, Place, PlaceProvider } from '../types'
 
 /** 検索範囲（全時間帯）全体に生成する件数。距離は対数一様なので各時間帯にほぼ均等に入る */
-export const MOCK_COUNT = 180
+export const MOCK_COUNT = 420
 
 const PLACE_WORDS = [
   '桜ヶ丘', '若葉', '緑町', '富士見', '青葉台', '東山', '宮前', '鶴見', '柏木', '大宮', '松原', '梅ヶ丘',
@@ -40,12 +40,13 @@ const MOCK_CATEGORIES = Object.keys(TEMPLATES) as Exclude<Category, 'other'>[]
 export function mockTerrainElevation(p: LatLng): number {
   const x = p.lng * 111
   const y = p.lat * 111
+  // 最低 3m（デモで「海上を横切る」判定に引っかからないよう 0m にはしない）
   const v =
-    20 +
-    15 * Math.sin(x / 3.1) * Math.cos(y / 2.7) +
-    8 * Math.sin((x + y) / 1.3) +
-    25 * (Math.sin(x / 11) + Math.cos(y / 13))
-  return Math.max(0, Math.round(v * 10) / 10)
+    60 +
+    22 * Math.sin(x / 2.3) * Math.cos(y / 2.9) +
+    9 * Math.sin((x + y) / 1.1) +
+    24 * (Math.sin(x / 9) + Math.cos(y / 11))
+  return Math.max(3, Math.round(v * 10) / 10)
 }
 
 /** 展望台などは目的地付近に丘を盛る */

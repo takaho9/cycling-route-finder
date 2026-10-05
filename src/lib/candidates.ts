@@ -40,11 +40,11 @@ const LABEL_ORDER: Record<ElevationLabel, number> = { flat: 0, rolling: 1, hilly
  * - 高低差フィルタ: 標高未取得の候補は「全部」以外では除外
  * - 海上・水面を横切っていそうな候補は、どの並びでも後ろへ（R5）
  */
-export function filterAndSort(places: readonly Place[], o: FilterOptions): Place[] {
+export function filterAndSort<T extends Place>(places: readonly T[], o: FilterOptions): T[] {
   let list = places.filter(
     (p) => (o.elevation === 'all' || p.elevation?.label === o.elevation) && (o.categories.size === 0 || o.categories.has(p.category)),
   )
-  const byDist = (a: Place, b: Place) => a.distanceKm - b.distanceKm
+  const byDist = (a: T, b: T) => a.distanceKm - b.distanceKm
   switch (o.sort) {
     case 'near':
       list = [...list].sort(byDist)
@@ -79,10 +79,10 @@ export function categoriesIn(places: readonly Place[]): Category[] {
 /**
  * 今日のおすすめ（日付シードで日替わり、未訪問に加点、カテゴリ重複なし）。
  */
-export function pickRecommendations(
-  places: readonly Place[],
+export function pickRecommendations<T extends Place>(
+  places: readonly T[],
   { dateKey, visited, count = 3 }: { dateKey: string; visited: ReadonlySet<string>; count?: number },
-): Place[] {
+): T[] {
   const scored = places
     .map((p) => {
       const daily = hashString(`${dateKey}|${p.id}`) / 2 ** 32
@@ -94,7 +94,7 @@ export function pickRecommendations(
       return { p, score }
     })
     .sort((a, b) => b.score - a.score || (a.p.id < b.p.id ? -1 : 1))
-  const out: Place[] = []
+  const out: T[] = []
   const usedCats = new Set<Category>()
   for (const { p } of scored) {
     if (out.length >= count) break
@@ -110,7 +110,7 @@ export function pickRecommendations(
 }
 
 /** ガチャ: 直前の結果を除いてランダムに 1 件 */
-export function pickGacha(places: readonly Place[], excludeId: string | null, rng: () => number = Math.random): Place | null {
+export function pickGacha<T extends Place>(places: readonly T[], excludeId: string | null, rng: () => number = Math.random): T | null {
   const pool = places.length > 1 && excludeId ? places.filter((p) => p.id !== excludeId) : places
   if (pool.length === 0) return null
   return pool[Math.floor(rng() * pool.length) % pool.length]

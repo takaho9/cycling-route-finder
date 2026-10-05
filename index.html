@@ -2,13 +2,75 @@
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#16a34a" />
-    <title>ちょいチャリ</title>
+    <title>ちょいチャリ — 時間でえらぶサイクリング</title>
+    <meta name="description" content="時間をえらぶだけで、ちょうどいいサイクリングの行き先を提案。Googleマップでそのまま出発。" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#FBF8F3" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0F1419" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="ちょいチャリ" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon-180.png" />
+    <style>
+      /* iOS 向けスプラッシュ相当（DESIGN §7）。React マウント後にフェードアウト */
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        background: #fbf8f3;
+        color: #1c1b1a;
+        font-family: 'Noto Sans JP', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans CJK JP', 'Yu Gothic UI', Meiryo, system-ui, sans-serif;
+        transition: opacity 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+      }
+      #splash.is-hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #splash img {
+        width: 96px;
+        height: 96px;
+        border-radius: 22px;
+      }
+      #splash .splash__name {
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      #splash .splash__tag {
+        position: absolute;
+        bottom: calc(40px + env(safe-area-inset-bottom, 0px));
+        font-size: 14px;
+        color: #6b6560;
+      }
+      @media (prefers-color-scheme: dark) {
+        #splash {
+          background: #0f1419;
+          color: #f3f1ec;
+        }
+        #splash .splash__tag {
+          color: #a3acb8;
+        }
+      }
+    </style>
   </head>
   <body>
+    <div id="splash" aria-hidden="true">
+      <img src="/icons/icon-192.png" alt="" width="96" height="96" />
+      <div class="splash__name">ちょいチャリ</div>
+      <div class="splash__tag">時間をえらんで、どこかへ。</div>
+    </div>
     <div id="root"></div>
+    <noscript>ちょいチャリを使うには JavaScript を有効にしてね。</noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

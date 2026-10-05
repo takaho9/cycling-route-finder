@@ -8,9 +8,14 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc -b"
+    "test:watch": "vitest",
+    "test:live": "LIVE=1 vitest run",
+    "typecheck": "tsc -b",
+    "icons": "node scripts/gen-icons.mjs",
+    "screenshots": "node scripts/screenshots.mjs"
   },
   "dependencies": {
+    "@fontsource/outfit": "^5.3.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
@@ -27,5 +32,8 @@
     "vite": "^8.3.2",
     "vite-plugin-pwa": "^2.0.0",
     "vitest": "^5.0.3"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
