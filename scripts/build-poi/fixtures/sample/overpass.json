@@ -1,0 +1,734 @@
+{
+ "version": 0.6,
+ "generator": "hand-written sample fixture around Tokyo Station (choichari v1.3). Real names, approx. real coords (+-100m), fake negative OSM ids, no wikidata/photos.",
+ "elements": [
+  {
+   "type": "way",
+   "id": -1,
+   "bounds": {
+    "minlat": 35.676,
+    "minlon": 139.754,
+    "maxlat": 35.684,
+    "maxlon": 139.762
+   },
+   "tags": {
+    "name": "皇居外苑",
+    "leisure": "park"
+   }
+  },
+  {
+   "type": "way",
+   "id": -2,
+   "bounds": {
+    "minlat": 35.6828,
+    "minlon": 139.754,
+    "maxlat": 35.6888,
+    "maxlon": 139.76
+   },
+   "tags": {
+    "name": "皇居東御苑",
+    "leisure": "garden"
+   }
+  },
+  {
+   "type": "way",
+   "id": -3,
+   "bounds": {
+    "minlat": 35.689,
+    "minlon": 139.749,
+    "maxlat": 35.695,
+    "maxlon": 139.753
+   },
+   "tags": {
+    "name": "北の丸公園",
+    "leisure": "park"
+   }
+  },
+  {
+   "type": "way",
+   "id": -4,
+   "bounds": {
+    "minlat": 35.6715,
+    "minlon": 139.754,
+    "maxlat": 35.6755,
+    "maxlon": 139.758
+   },
+   "tags": {
+    "name": "日比谷公園",
+    "leisure": "park"
+   }
+  },
+  {
+   "type": "way",
+   "id": -5,
+   "bounds": {
+    "minlat": 35.6567,
+    "minlon": 139.7604,
+    "maxlat": 35.6627,
+    "maxlon": 139.7664
+   },
+   "tags": {
+    "name": "浜離宮恩賜庭園",
+    "leisure": "garden"
+   }
+  },
+  {
+   "type": "way",
+   "id": -6,
+   "bounds": {
+    "minlat": 35.653,
+    "minlon": 139.747,
+    "maxlat": 35.659,
+    "maxlon": 139.751
+   },
+   "tags": {
+    "name": "芝公園",
+    "leisure": "park"
+   }
+  },
+  {
+   "type": "way",
+   "id": -7,
+   "bounds": {
+    "minlat": 35.6787,
+    "minlon": 139.7961,
+    "maxlat": 35.6817,
+    "maxlon": 139.7997
+   },
+   "tags": {
+    "name": "清澄庭園",
+    "leisure": "garden"
+   }
+  },
+  {
+   "type": "way",
+   "id": -8,
+   "bounds": {
+    "minlat": 35.6855,
+    "minlon": 139.7868,
+    "maxlat": 35.6891,
+    "maxlon": 139.7892
+   },
+   "tags": {
+    "name": "浜町公園",
+    "leisure": "park"
+   }
+  },
+  {
+   "type": "way",
+   "id": -9,
+   "bounds": {
+    "minlat": 35.704,
+    "minlon": 139.7477,
+    "maxlat": 35.707,
+    "maxlon": 139.7517
+   },
+   "tags": {
+    "name": "小石川後楽園",
+    "leisure": "garden"
+   }
+  },
+  {
+   "type": "way",
+   "id": -10,
+   "bounds": {
+    "minlat": 35.7106,
+    "minlon": 139.7702,
+    "maxlat": 35.7186,
+    "maxlon": 139.7762
+   },
+   "tags": {
+    "name": "上野恩賜公園",
+    "leisure": "park"
+   }
+  },
+  {
+   "type": "way",
+   "id": -11,
+   "bounds": {
+    "minlat": 35.6693,
+    "minlon": 139.7854,
+    "maxlat": 35.6733,
+    "maxlon": 139.787
+   },
+   "tags": {
+    "name": "石川島公園",
+    "leisure": "park"
+   }
+  },
+  {
+   "type": "way",
+   "id": -12,
+   "bounds": {
+    "minlat": 35.6812,
+    "minlon": 139.7041,
+    "maxlat": 35.6892,
+    "maxlon": 139.7161
+   },
+   "tags": {
+    "name": "新宿御苑",
+    "leisure": "garden"
+   }
+  },
+  {
+   "type": "way",
+   "id": -13,
+   "bounds": {
+    "minlat": 35.692,
+    "minlon": 139.733,
+    "maxlat": 35.7,
+    "maxlon": 139.739
+   },
+   "tags": {
+    "name": "外濠公園",
+    "leisure": "park"
+   }
+  },
+  {
+   "type": "way",
+   "id": -14,
+   "bounds": {
+    "minlat": 35.6877,
+    "minlon": 139.7697,
+    "maxlat": 35.6883,
+    "maxlon": 139.7703
+   },
+   "tags": {
+    "name": "ちびっこ広場児童遊園",
+    "leisure": "park"
+   }
+  },
+  {
+   "type": "node",
+   "id": -15,
+   "lat": 35.6815,
+   "lon": 139.7645,
+   "tags": {
+    "name": "スターバックス コーヒー 丸の内店",
+    "amenity": "cafe",
+    "brand": "スターバックス",
+    "brand:wikidata": "Q37158"
+   }
+  },
+  {
+   "type": "node",
+   "id": -16,
+   "lat": 35.6798,
+   "lon": 139.7647,
+   "tags": {
+    "name": "KITTEガーデン",
+    "tourism": "viewpoint"
+   }
+  },
+  {
+   "type": "node",
+   "id": -17,
+   "lat": 35.708,
+   "lon": 139.7522,
+   "tags": {
+    "name": "文京シビックセンター展望ラウンジ",
+    "tourism": "viewpoint"
+   }
+  },
+  {
+   "type": "way",
+   "id": -18,
+   "center": {
+    "lat": 35.702,
+    "lon": 139.7679
+   },
+   "tags": {
+    "name": "神田明神",
+    "amenity": "place_of_worship",
+    "religion": "shinto"
+   }
+  },
+  {
+   "type": "way",
+   "id": -19,
+   "center": {
+    "lat": 35.7076,
+    "lon": 139.7681
+   },
+   "tags": {
+    "name": "湯島天満宮",
+    "amenity": "place_of_worship",
+    "religion": "shinto"
+   }
+  },
+  {
+   "type": "way",
+   "id": -20,
+   "center": {
+    "lat": 35.6941,
+    "lon": 139.7436
+   },
+   "tags": {
+    "name": "靖國神社",
+    "amenity": "place_of_worship",
+    "religion": "shinto"
+   }
+  },
+  {
+   "type": "way",
+   "id": -21,
+   "center": {
+    "lat": 35.6746,
+    "lon": 139.7395
+   },
+   "tags": {
+    "name": "日枝神社",
+    "amenity": "place_of_worship",
+    "religion": "shinto"
+   }
+  },
+  {
+   "type": "way",
+   "id": -22,
+   "center": {
+    "lat": 35.6648,
+    "lon": 139.7488
+   },
+   "tags": {
+    "name": "愛宕神社",
+    "amenity": "place_of_worship",
+    "religion": "shinto"
+   }
+  },
+  {
+   "type": "way",
+   "id": -23,
+   "center": {
+    "lat": 35.6833,
+    "lon": 139.7853
+   },
+   "tags": {
+    "name": "水天宮",
+    "amenity": "place_of_worship",
+    "religion": "shinto"
+   }
+  },
+  {
+   "type": "way",
+   "id": -24,
+   "center": {
+    "lat": 35.6996,
+    "lon": 139.7457
+   },
+   "tags": {
+    "name": "東京大神宮",
+    "amenity": "place_of_worship",
+    "religion": "shinto"
+   }
+  },
+  {
+   "type": "way",
+   "id": -25,
+   "center": {
+    "lat": 35.6648,
+    "lon": 139.7696
+   },
+   "tags": {
+    "name": "波除神社",
+    "amenity": "place_of_worship",
+    "religion": "shinto"
+   }
+  },
+  {
+   "type": "way",
+   "id": -26,
+   "center": {
+    "lat": 35.6837,
+    "lon": 139.779
+   },
+   "tags": {
+    "name": "小網神社",
+    "amenity": "place_of_worship",
+    "religion": "shinto"
+   }
+  },
+  {
+   "type": "way",
+   "id": -27,
+   "center": {
+    "lat": 35.7203,
+    "lon": 139.7607
+   },
+   "tags": {
+    "name": "根津神社",
+    "amenity": "place_of_worship",
+    "religion": "shinto"
+   }
+  },
+  {
+   "type": "way",
+   "id": -28,
+   "center": {
+    "lat": 35.7155,
+    "lon": 139.7975
+   },
+   "tags": {
+    "name": "浅草神社",
+    "amenity": "place_of_worship",
+    "religion": "shinto"
+   }
+  },
+  {
+   "type": "way",
+   "id": -29,
+   "center": {
+    "lat": 35.6573,
+    "lon": 139.7484
+   },
+   "tags": {
+    "name": "増上寺",
+    "amenity": "place_of_worship",
+    "religion": "buddhist"
+   }
+  },
+  {
+   "type": "way",
+   "id": -30,
+   "center": {
+    "lat": 35.6664,
+    "lon": 139.7722
+   },
+   "tags": {
+    "name": "築地本願寺",
+    "amenity": "place_of_worship",
+    "religion": "buddhist"
+   }
+  },
+  {
+   "type": "way",
+   "id": -31,
+   "center": {
+    "lat": 35.71476,
+    "lon": 139.79666
+   },
+   "tags": {
+    "name": "浅草寺",
+    "amenity": "place_of_worship",
+    "religion": "buddhist"
+   }
+  },
+  {
+   "type": "way",
+   "id": -32,
+   "center": {
+    "lat": 35.7224,
+    "lon": 139.7738
+   },
+   "tags": {
+    "name": "寛永寺",
+    "amenity": "place_of_worship",
+    "religion": "buddhist"
+   }
+  },
+  {
+   "type": "way",
+   "id": -33,
+   "center": {
+    "lat": 35.688,
+    "lon": 139.7546
+   },
+   "tags": {
+    "name": "江戸城天守台",
+    "historic": "ruins"
+   }
+  },
+  {
+   "type": "node",
+   "id": -34,
+   "lat": 35.6776,
+   "lon": 139.7522,
+   "tags": {
+    "name": "桜田門",
+    "historic": "city_gate"
+   }
+  },
+  {
+   "type": "way",
+   "id": -35,
+   "center": {
+    "lat": 35.7188,
+    "lon": 139.7765
+   },
+   "tags": {
+    "name": "東京国立博物館",
+    "tourism": "museum"
+   }
+  },
+  {
+   "type": "way",
+   "id": -36,
+   "center": {
+    "lat": 35.7154,
+    "lon": 139.7759
+   },
+   "tags": {
+    "name": "国立西洋美術館",
+    "tourism": "museum"
+   }
+  },
+  {
+   "type": "way",
+   "id": -37,
+   "center": {
+    "lat": 35.7174,
+    "lon": 139.7728
+   },
+   "tags": {
+    "name": "東京都美術館",
+    "tourism": "museum"
+   }
+  },
+  {
+   "type": "way",
+   "id": -38,
+   "center": {
+    "lat": 35.7163,
+    "lon": 139.7764
+   },
+   "tags": {
+    "name": "国立科学博物館",
+    "tourism": "museum"
+   }
+  },
+  {
+   "type": "way",
+   "id": -39,
+   "center": {
+    "lat": 35.6906,
+    "lon": 139.7547
+   },
+   "tags": {
+    "name": "東京国立近代美術館",
+    "tourism": "museum"
+   }
+  },
+  {
+   "type": "way",
+   "id": -40,
+   "center": {
+    "lat": 35.6785,
+    "lon": 139.7633
+   },
+   "tags": {
+    "name": "三菱一号館美術館",
+    "tourism": "museum"
+   }
+  },
+  {
+   "type": "way",
+   "id": -41,
+   "center": {
+    "lat": 35.6795,
+    "lon": 139.7699
+   },
+   "tags": {
+    "name": "アーティゾン美術館",
+    "tourism": "museum"
+   }
+  },
+  {
+   "type": "way",
+   "id": -42,
+   "center": {
+    "lat": 35.682,
+    "lon": 139.7655
+   },
+   "tags": {
+    "name": "東京ステーションギャラリー",
+    "tourism": "museum"
+   }
+  },
+  {
+   "type": "way",
+   "id": -43,
+   "center": {
+    "lat": 35.6767,
+    "lon": 139.7712
+   },
+   "tags": {
+    "name": "国立映画アーカイブ",
+    "tourism": "museum"
+   }
+  },
+  {
+   "type": "way",
+   "id": -44,
+   "center": {
+    "lat": 35.6649,
+    "lon": 139.7618
+   },
+   "tags": {
+    "name": "旧新橋停車場 鉄道歴史展示室",
+    "tourism": "museum"
+   }
+  },
+  {
+   "type": "node",
+   "id": -45,
+   "lat": 35.65858,
+   "lon": 139.74543,
+   "tags": {
+    "name": "東京タワー",
+    "tourism": "attraction"
+   }
+  },
+  {
+   "type": "node",
+   "id": -46,
+   "lat": 35.684,
+   "lon": 139.7741,
+   "tags": {
+    "name": "日本橋",
+    "tourism": "attraction"
+   }
+  },
+  {
+   "type": "node",
+   "id": -47,
+   "lat": 35.6797,
+   "lon": 139.7527,
+   "tags": {
+    "name": "二重橋",
+    "tourism": "attraction"
+   }
+  },
+  {
+   "type": "node",
+   "id": -48,
+   "lat": 35.6812,
+   "lon": 139.7649,
+   "tags": {
+    "name": "東京駅丸の内駅舎",
+    "tourism": "attraction"
+   }
+  },
+  {
+   "type": "node",
+   "id": -49,
+   "lat": 35.6695,
+   "lon": 139.7678,
+   "tags": {
+    "name": "歌舞伎座",
+    "tourism": "attraction"
+   }
+  },
+  {
+   "type": "node",
+   "id": -50,
+   "lat": 35.6655,
+   "lon": 139.7705,
+   "tags": {
+    "name": "築地場外市場",
+    "tourism": "attraction"
+   }
+  },
+  {
+   "type": "node",
+   "id": -51,
+   "lat": 35.7111,
+   "lon": 139.7964,
+   "tags": {
+    "name": "雷門",
+    "tourism": "attraction"
+   }
+  },
+  {
+   "type": "node",
+   "id": -52,
+   "lat": 35.7107,
+   "lon": 139.7745,
+   "tags": {
+    "name": "アメ横",
+    "tourism": "attraction"
+   }
+  },
+  {
+   "type": "node",
+   "id": -53,
+   "lat": 35.7006,
+   "lon": 139.7654,
+   "tags": {
+    "name": "湯島聖堂",
+    "tourism": "attraction"
+   }
+  },
+  {
+   "type": "way",
+   "id": -54,
+   "center": {
+    "lat": 35.712,
+    "lon": 139.7708
+   },
+   "tags": {
+    "name": "不忍池",
+    "natural": "water",
+    "water": "pond"
+   }
+  },
+  {
+   "type": "node",
+   "id": -55,
+   "lat": 35.6784,
+   "lon": 139.763,
+   "tags": {
+    "name": "Café 1894",
+    "amenity": "cafe"
+   }
+  },
+  {
+   "type": "node",
+   "id": -56,
+   "lat": 35.6681,
+   "lon": 139.7614,
+   "tags": {
+    "name": "カフェーパウリスタ",
+    "amenity": "cafe"
+   }
+  },
+  {
+   "type": "node",
+   "id": -57,
+   "lat": 35.6961,
+   "lon": 139.7584,
+   "tags": {
+    "name": "さぼうる",
+    "amenity": "cafe"
+   }
+  },
+  {
+   "type": "node",
+   "id": -58,
+   "lat": 35.6962,
+   "lon": 139.759,
+   "tags": {
+    "name": "ラドリオ",
+    "amenity": "cafe"
+   }
+  },
+  {
+   "type": "node",
+   "id": -59,
+   "lat": 35.6719,
+   "lon": 139.7653,
+   "tags": {
+    "name": "木村家",
+    "shop": "bakery"
+   }
+  },
+  {
+   "type": "node",
+   "id": -60,
+   "lat": 35.7125,
+   "lon": 139.7968,
+   "tags": {
+    "name": "梅園",
+    "shop": "confectionery"
+   }
+  }
+ ]
+}

@@ -21,7 +21,22 @@ export const CATEGORIES = [
 
 export type Category = (typeof CATEGORIES)[number]
 
-export type PlaceSource = 'overpass' | 'mock'
+/** static = 事前生成した都内データ（public/data/tokyo, v1.3） */
+export type PlaceSource = 'static' | 'overpass' | 'mock'
+
+/** 事前生成データに埋め込んだ写真（Commons で解決済み, v1.3）。実行時の写真さがしを省く */
+export interface EmbeddedPhoto {
+  /** 幅 500px のサムネ（一覧） */
+  url500: string
+  /** 幅 960px のサムネ（詳細） */
+  url960: string
+  artist?: string
+  license?: string
+  /** Commons のファイルページ */
+  pageUrl?: string
+  /** true = 施設そのものではなく付近の写真 */
+  nearby?: boolean
+}
 
 export type ElevationLabel = 'flat' | 'rolling' | 'hilly'
 
@@ -68,6 +83,10 @@ export interface Place {
   /** OSM タグ等の生データ (wikidata / wikimedia_commons / image などを保持) */
   tags?: Record<string, string>
   photoUrl?: string
+  /** 事前生成データの埋め込み写真（static のみ） */
+  photoEmbed?: EmbeddedPhoto
+  /** 事前計算した見栄えスコア（static のみ。あれば attractiveness() はこれを使う） */
+  score?: number
   source: PlaceSource
   elevation?: ElevationSummary
 }

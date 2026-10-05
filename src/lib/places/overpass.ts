@@ -83,12 +83,21 @@ export function bboxAround(center: LatLng, radiusKm: number): BBox {
  */
 export function buildOverpassQuery(center: LatLng, radiusKm: number): string {
   const b = bboxAround(center, radiusKm)
+  return buildSelectorQuery(`[out:json][timeout:${OVERPASS_SERVER_TIMEOUT_S}][bbox:${b.s},${b.w},${b.n},${b.e}];`, '')
+}
+
+/**
+ * OVERPASS_SELECTORS を 1 本のクエリにまとめる（bbox 版と area 版の共通部分）。
+ * scope は各セレクタの末尾に付ける絞り込み（例: "(area.tokyo)"）。
+ */
+export function buildSelectorQuery(header: string, scope: string, prelude: string[] = []): string {
   const group = (kind: SelectorKind) =>
     OVERPASS_SELECTORS.filter((s) => s.kinds.includes(kind)).flatMap((s) =>
-      kind === 'node' ? [`node${s.filter};`] : [`way${s.filter};`, `relation${s.filter};`],
+      kind === 'node' ? [`node${s.filter}${scope};`] : [`way${s.filter}${scope};`, `relation${s.filter}${scope};`],
     )
   return [
-    `[out:json][timeout:${OVERPASS_SERVER_TIMEOUT_S}][bbox:${b.s},${b.w},${b.n},${b.e}];`,
+    header,
+    ...prelude,
     `(${group('node').join('')})->.n;`,
     `.n out body;`,
     `(${group('park').join('')})->.p;`,
@@ -96,6 +105,15 @@ export function buildOverpassQuery(center: LatLng, radiusKm: number): string {
     `(${group('area').join('')})->.a;`,
     `.a out tags center;`,
   ].join('\n')
+}
+
+/**
+ * 事前生成用（v1.3, scripts/build-poi）: 行政区域 area 全体を 1 回で取るクエリ。
+ * 例: buildOverpassAreaQuery('["ISO3166-2"="JP-13"]', 180)
+ */
+export function buildOverpassAreaQuery(areaFilter: string, timeoutS = 180, maxsizeBytes?: number): string {
+  const maxsize = maxsizeBytes ? `[maxsize:${maxsizeBytes}]` : ''
+  return buildSelectorQuery(`[out:json][timeout:${timeoutS}]${maxsize};`, '(area.scope)', [`area${areaFilter}->.scope;`])
 }
 
 export interface OverpassElement {
@@ -149,7 +167,7 @@ export function categorizeOsmTags(tags: Record<string, string>): Category {
   return 'other'
 }
 
-function elementCenter(el: OverpassElement): LatLng | null {
+export function elementCenter(el: OverpassElement): LatLng | null {
   if (typeof el.lat === 'number' && typeof el.lon === 'number') return { lat: el.lat, lng: el.lon }
   if (el.center) return { lat: el.center.lat, lng: el.center.lon }
   if (el.bounds) {
@@ -158,14 +176,14 @@ function elementCenter(el: OverpassElement): LatLng | null {
   return null
 }
 
-function bboxDiagonalM(el: OverpassElement): number {
+export function bboxDiagonalM(el: OverpassElement): number {
   if (!el.bounds) return 0
   const b = el.bounds
   return haversineKm({ lat: b.minlat, lng: b.minlon }, { lat: b.maxlat, lng: b.maxlon }) * 1000
 }
 
 /** 小規模公園・チェーン店などノイズを除外（BACKLOG Y1） */
-function isWorthVisiting(el: OverpassElement, category: Category): boolean {
+export function isWorthVisiting(el: OverpassElement, category: Category): boolean {
   const tags = el.tags ?? {}
   if (tags.leisure === 'park' || tags.leisure === 'garden') {
     if (SMALL_PARK_NAME_RE.test(tags.name ?? '')) return false
@@ -180,7 +198,7 @@ function isWorthVisiting(el: OverpassElement, category: Category): boolean {
 }
 
 /** タグのうち保持するもの */
-const KEPT_TAG_KEYS = [
+export const KEPT_TAG_KEYS = [
   'name',
   'name:en',
   'name:ja',

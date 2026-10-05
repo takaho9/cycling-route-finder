@@ -170,8 +170,8 @@ describe('searchPlaces', () => {
     expect(m.search).toHaveBeenCalledTimes(2)
   })
 
-  it('default providers are Overpass → Mock (no paid APIs); demo is Mock only', () => {
-    expect(createDefaultProviders().map((p) => p.name)).toEqual(['overpass', 'mock'])
+  it('default providers are Static → Overpass → Mock (no paid APIs, v1.3); demo is Mock only', () => {
+    expect(createDefaultProviders().map((p) => p.name)).toEqual(['static', 'overpass', 'mock'])
     expect(createDemoProviders().map((p) => p.name)).toEqual(['mock'])
   })
 })

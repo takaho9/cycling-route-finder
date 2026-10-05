@@ -66,7 +66,7 @@ export default defineConfig({
     globals: false,
     setupFiles: ['./src/test/setup.ts'],
     // `npm run test:live` だけ実 API スモーク（CI では実行しない, BACKLOG G3）
-    include: live ? ['src/**/*.live.test.ts'] : ['src/**/*.test.{ts,tsx}'],
+    include: live ? ['src/**/*.live.test.ts'] : ['src/**/*.test.{ts,tsx}', 'scripts/**/*.test.ts'],
     exclude: live ? [] : ['src/**/*.live.test.ts', 'node_modules/**'],
     testTimeout: live ? 60_000 : 5_000,
   },

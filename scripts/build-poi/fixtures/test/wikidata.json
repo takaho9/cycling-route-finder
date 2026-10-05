@@ -1,0 +1,209 @@
+{
+ "head": {
+  "vars": [
+   "item",
+   "label",
+   "coord",
+   "image",
+   "sitelinks",
+   "root",
+   "heritage"
+  ]
+ },
+ "results": {
+  "bindings": [
+   {
+    "item": {
+     "value": "http://www.wikidata.org/entity/Q900001"
+    },
+    "label": {
+     "xml:lang": "ja",
+     "value": "日比谷公園"
+    },
+    "coord": {
+     "value": "Point(139.7561 35.6736)"
+    },
+    "sitelinks": {
+     "value": "12"
+    },
+    "root": {
+     "value": "http://www.wikidata.org/entity/Q22698"
+    },
+    "image": {
+     "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Hibiya%20Park.jpg"
+    }
+   },
+   {
+    "item": {
+     "value": "http://www.wikidata.org/entity/Q900001"
+    },
+    "label": {
+     "xml:lang": "ja",
+     "value": "日比谷公園"
+    },
+    "coord": {
+     "value": "Point(139.7561 35.6736)"
+    },
+    "sitelinks": {
+     "value": "12"
+    },
+    "root": {
+     "value": "http://www.wikidata.org/entity/Q1107656"
+    },
+    "image": {
+     "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Hibiya%20Park.jpg"
+    }
+   },
+   {
+    "item": {
+     "value": "http://www.wikidata.org/entity/Q900002"
+    },
+    "label": {
+     "xml:lang": "ja",
+     "value": "日枝神社"
+    },
+    "coord": {
+     "value": "Point(139.7398 35.67505)"
+    },
+    "sitelinks": {
+     "value": "8"
+    },
+    "root": {
+     "value": "http://www.wikidata.org/entity/Q845945"
+    }
+   },
+   {
+    "item": {
+     "value": "http://www.wikidata.org/entity/Q900003"
+    },
+    "label": {
+     "xml:lang": "ja",
+     "value": "三縁山 増上寺"
+    },
+    "coord": {
+     "value": "Point(139.7484 35.6582)"
+    },
+    "sitelinks": {
+     "value": "15"
+    },
+    "root": {
+     "value": "http://www.wikidata.org/entity/Q5393308"
+    },
+    "heritage": {
+     "value": "http://www.wikidata.org/entity/Q1"
+    }
+   },
+   {
+    "item": {
+     "value": "http://www.wikidata.org/entity/Q900004"
+    },
+    "label": {
+     "xml:lang": "ja",
+     "value": "愛宕神社"
+    },
+    "coord": {
+     "value": "Point(139.7488 35.6666)"
+    },
+    "sitelinks": {
+     "value": "6"
+    },
+    "root": {
+     "value": "http://www.wikidata.org/entity/Q845945"
+    }
+   },
+   {
+    "item": {
+     "value": "http://www.wikidata.org/entity/Q900005"
+    },
+    "label": {
+     "xml:lang": "ja",
+     "value": "東京大神宮"
+    },
+    "coord": {
+     "value": "Point(139.7457 35.7041)"
+    },
+    "sitelinks": {
+     "value": "4"
+    },
+    "root": {
+     "value": "http://www.wikidata.org/entity/Q845945"
+    }
+   },
+   {
+    "item": {
+     "value": "http://www.wikidata.org/entity/Q900006"
+    },
+    "label": {
+     "xml:lang": "ja",
+     "value": "日本橋"
+    },
+    "coord": {
+     "value": "Point(139.7741 35.684)"
+    },
+    "sitelinks": {
+     "value": "5"
+    },
+    "root": {
+     "value": "http://www.wikidata.org/entity/Q12280"
+    },
+    "image": {
+     "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Nihonbashi.jpg"
+    }
+   },
+   {
+    "item": {
+     "value": "http://www.wikidata.org/entity/Q900007"
+    },
+    "label": {
+     "xml:lang": "ja",
+     "value": "無名の橋"
+    },
+    "coord": {
+     "value": "Point(139.78 35.695)"
+    },
+    "sitelinks": {
+     "value": "1"
+    },
+    "root": {
+     "value": "http://www.wikidata.org/entity/Q12280"
+    }
+   },
+   {
+    "item": {
+     "value": "http://www.wikidata.org/entity/Q900008"
+    },
+    "label": {
+     "xml:lang": "ja",
+     "value": "記事の無い公園"
+    },
+    "coord": {
+     "value": "Point(139.78 35.7)"
+    },
+    "sitelinks": {
+     "value": "0"
+    },
+    "root": {
+     "value": "http://www.wikidata.org/entity/Q22698"
+    }
+   },
+   {
+    "item": {
+     "value": "http://www.wikidata.org/entity/Q900009"
+    },
+    "label": {
+     "xml:lang": "ja",
+     "value": "伊豆大島の何か"
+    },
+    "coord": {
+     "value": "Point(139.4 34.7)"
+    },
+    "sitelinks": {
+     "value": "9"
+    },
+    "root": {
+     "value": "http://www.wikidata.org/entity/Q570116"
+    }
+   }
+  ]
+ }
+}

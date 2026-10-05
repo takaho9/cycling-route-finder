@@ -1,0 +1,165 @@
+{
+ "elements": [
+  {
+   "type": "way",
+   "id": 101,
+   "bounds": {
+    "minlat": 35.6715,
+    "minlon": 139.7538,
+    "maxlat": 35.6755,
+    "maxlon": 139.7582
+   },
+   "tags": {
+    "name": "日比谷公園",
+    "leisure": "park",
+    "wikidata": "Q900001"
+   }
+  },
+  {
+   "type": "node",
+   "id": 102,
+   "lat": 35.6735,
+   "lon": 139.756,
+   "tags": {
+    "name": "日比谷公園",
+    "leisure": "park",
+    "wikidata": "Q900001"
+   }
+  },
+  {
+   "type": "way",
+   "id": 103,
+   "center": {
+    "lat": 35.6746,
+    "lon": 139.7395
+   },
+   "tags": {
+    "name": "日枝神社",
+    "amenity": "place_of_worship",
+    "religion": "shinto"
+   }
+  },
+  {
+   "type": "way",
+   "id": 104,
+   "center": {
+    "lat": 35.6573,
+    "lon": 139.7484
+   },
+   "tags": {
+    "name": "増上寺",
+    "amenity": "place_of_worship",
+    "religion": "buddhist"
+   }
+  },
+  {
+   "type": "node",
+   "id": 105,
+   "lat": 35.6648,
+   "lon": 139.7488,
+   "tags": {
+    "name": "愛宕神社",
+    "amenity": "place_of_worship",
+    "religion": "shinto"
+   }
+  },
+  {
+   "type": "node",
+   "id": 106,
+   "lat": 35.6996,
+   "lon": 139.7457,
+   "tags": {
+    "name": "東京大神宮",
+    "amenity": "place_of_worship",
+    "religion": "shinto"
+   }
+  },
+  {
+   "type": "way",
+   "id": 107,
+   "bounds": {
+    "minlat": 35.688,
+    "minlon": 139.77,
+    "maxlat": 35.6882,
+    "maxlon": 139.7702
+   },
+   "tags": {
+    "name": "ちびっこ児童遊園",
+    "leisure": "park"
+   }
+  },
+  {
+   "type": "node",
+   "id": 108,
+   "lat": 35.6815,
+   "lon": 139.7645,
+   "tags": {
+    "name": "スターバックス",
+    "amenity": "cafe",
+    "brand": "スターバックス"
+   }
+  },
+  {
+   "type": "node",
+   "id": 109,
+   "lat": 34.75,
+   "lon": 139.36,
+   "tags": {
+    "name": "三原山展望台",
+    "tourism": "viewpoint"
+   }
+  },
+  {
+   "type": "node",
+   "id": 110,
+   "lat": 35.52,
+   "lon": 139.7,
+   "tags": {
+    "name": "範囲外カフェ",
+    "amenity": "cafe"
+   }
+  },
+  {
+   "type": "node",
+   "id": 111,
+   "lat": 35.71476,
+   "lon": 139.79666,
+   "tags": {
+    "name": "浅草寺",
+    "amenity": "place_of_worship",
+    "religion": "buddhist",
+    "wikimedia_commons": "File:Sensoji.jpg"
+   }
+  },
+  {
+   "type": "node",
+   "id": 112,
+   "lat": 35.6585,
+   "lon": 139.7454,
+   "tags": {
+    "name": "東京タワー",
+    "tourism": "attraction"
+   }
+  },
+  {
+   "type": "node",
+   "id": 113,
+   "lat": 35.69,
+   "lon": 139.77,
+   "tags": {
+    "name": "喫茶テスト",
+    "amenity": "cafe"
+   }
+  },
+  {
+   "type": "node",
+   "id": 114,
+   "lat": 35.691,
+   "lon": 139.77,
+   "tags": {
+    "name": "喫茶 テスト",
+    "amenity": "cafe"
+   }
+  }
+ ]
+}

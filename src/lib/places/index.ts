@@ -5,9 +5,11 @@ import type { LatLng, Place, PlaceProvider, PlaceSource } from '../types'
 import { cacheKey, createDefaultPlacesCache, GRID_MARGIN_KM, snapToGrid, type PlacesCache } from './cache'
 import { createMockProvider } from './mock'
 import { createOverpassProvider, OverpassRemarkError } from './overpass'
+import { createStaticProvider, OutOfCoverageError, type StaticProvider } from './static'
 
 export { createMockProvider, generateMockPlaces, mockTerrainElevation } from './mock'
 export { createOverpassProvider } from './overpass'
+export { createStaticProvider, OutOfCoverageError } from './static'
 export { balancedSample, dedupeNearby, filterDonut, MAX_CANDIDATES } from './sampling'
 
 /** 取得結果の種類（BACKLOG R2）。UI はこれで出し分ける */
@@ -20,16 +22,26 @@ export interface SearchResult {
   source: PlaceSource
   /** true ならデモデータ（UI で必ず表示する） */
   isDemo: boolean
+  /** true なら事前生成データのサンプル版（網羅性が無いので UI はデモ扱いで表示, v1.3） */
+  sample?: boolean
   /** true ならキャッシュから */
   fromCache?: boolean
   /** フォールバックに至った各プロバイダの失敗 */
   errors: { provider: PlaceSource; error: unknown }[]
 }
 
-/** Overpass →（全滅時のみ）Mock。ランニングコスト 0 のためキー必須の API は使わない */
+/**
+ * 都内の事前生成データ（static）→ Overpass →（全滅時のみ）Mock（v1.3）。
+ * static は出発地が対象範囲外・取得失敗のとき throw して Overpass に譲る。
+ * ランニングコスト 0 のためキー必須の API は使わない。
+ */
 export function createDefaultProviders(): PlaceProvider[] {
-  return [createOverpassProvider(), createMockProvider()]
+  return [createStaticProvider(), createOverpassProvider(), createMockProvider()]
 }
+
+/** 永続キャッシュ（IndexedDB, TTL 7 日）に入れるプロバイダ。static は SW が持つので不要、mock は入れない */
+const PERSISTED_PROVIDERS: ReadonlySet<PlaceSource> = new Set<PlaceSource>(['overpass'])
+const isStaticProvider = (p: PlaceProvider): p is StaticProvider => typeof (p as Partial<StaticProvider>).isSample === 'function'
 
 /** デモモード（?demo=1）用: Mock のみ */
 export function createDemoProviders(): PlaceProvider[] {
@@ -90,35 +102,39 @@ export async function searchPlaces(
   const maxKm = band.maxKm + GRID_MARGIN_KM
   const minKm = Math.max(0, band.minKm - GRID_MARGIN_KM)
   const snapped = snapToGrid(center)
+  // in-flight 共有のキーはプロバイダ列全体。キャッシュのキーはプロバイダごと（static と overpass の結果を混ぜない, v1.3）
   const key = `${cacheKey(snapped, maxKm, list.map((p) => p.name).join('>'))}|${speedKmh}kmh`
+  const providerKey = (name: PlaceSource) => `${cacheKey(snapped, maxKm, name)}|${speedKmh}kmh`
   const store = useCache ? (cache ?? (defaultCache ??= createDefaultPlacesCache())) : null
 
   const run = async (signal: AbortSignal): Promise<SearchResult> => {
-    if (store) {
-      const hit = memoryCache.get(key) ?? (await store.get(key, now))
-      if (hit) {
-        memoryCache.set(key, hit)
-        return { ...hit, fromCache: true }
-      }
-    }
     const errors: SearchResult['errors'] = []
     for (const provider of list) {
+      const isDemo = provider.name === 'mock'
+      const pkey = providerKey(provider.name)
+      const persisted = !!store && PERSISTED_PROVIDERS.has(provider.name)
+      if (useCache && !isDemo) {
+        const hit = memoryCache.get(pkey) ?? (persisted ? await store!.get(pkey, now) : null)
+        if (hit) {
+          memoryCache.set(pkey, hit)
+          return { ...hit, fromCache: true, errors: [...errors] }
+        }
+      }
       try {
         const raw = await provider.search(snapped, minKm, maxKm, signal)
         const places = raw.map((p) => ({ ...p, source: provider.name }))
-        const isDemo = provider.name === 'mock'
+        const sample = isStaticProvider(provider) && provider.isSample()
         const result: SearchResult = {
           kind: isDemo ? 'demo' : places.length ? 'ok' : 'empty',
           places,
           source: provider.name,
           isDemo,
+          ...(sample ? { sample } : {}),
           errors: [...errors],
         }
-        // デモ結果はキャッシュしない（回線復帰後に実データを取りに行けるように）
-        if (store && !isDemo) {
-          memoryCache.set(key, result)
-          await store.put(key, result, now)
-        }
+        // デモ結果はキャッシュしない（回線復帰後に実データを取りに行けるように）。static はメモリだけ（SW が持つ）
+        if (useCache && !isDemo) memoryCache.set(pkey, { ...result, errors: [] })
+        if (persisted) await store!.put(pkey, result, now)
         return result
       } catch (e) {
         if (signal?.aborted) throw e
@@ -198,8 +214,11 @@ const isOnline = () => typeof navigator === 'undefined' || navigator.onLine !== 
  * オンラインなのに TypeError（CORS ヘッダの無い 429/504 など）は「混雑」扱い（BACKLOG-2 C12）。
  */
 export function fallbackReason(errors: readonly { error: unknown }[], online: boolean = isOnline()): FallbackReason | null {
-  if (errors.length === 0) return null
-  const flat = errors.flatMap(({ error }) => (error instanceof AggregateError ? error.errors : [error]))
+  // static の「対象範囲外」は失敗ではない
+  const flat = errors
+    .flatMap(({ error }) => (error instanceof AggregateError ? error.errors : [error]))
+    .filter((e) => !(e instanceof OutOfCoverageError))
+  if (flat.length === 0) return null
   if (
     flat.some(
       (e) => (e instanceof HttpError && (e.status === 429 || e.status >= 500)) || e instanceof TimeoutError || e instanceof OverpassRemarkError,

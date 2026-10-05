@@ -1,0 +1,14 @@
+{
+ "File:Hibiya Park.jpg": {
+  "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Hibiya_Park.jpg/500px-Hibiya_Park.jpg",
+  "artist": "Test Author",
+  "license": "CC BY-SA 4.0",
+  "pageUrl": "https://commons.wikimedia.org/wiki/File:Hibiya_Park.jpg"
+ },
+ "File:Sensoji.jpg": {
+  "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Sensoji.jpg/500px-Sensoji.jpg",
+  "artist": "Another",
+  "license": "CC BY 4.0",
+  "pageUrl": "https://commons.wikimedia.org/wiki/File:Sensoji.jpg"
+ }
+}

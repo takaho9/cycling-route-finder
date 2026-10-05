@@ -1,6 +1,6 @@
 import { fetchJson, isAbortError, mapWithConcurrency, type RequestOptions } from './http'
 import { createKvCache, type KvCache } from './kvCache'
-import type { Category, Place } from './types'
+import type { Category, EmbeddedPhoto, Place } from './types'
 
 /** サムネ幅（BACKLOG A4）: 一覧 / 詳細 */
 export const PHOTO_WIDTH_LIST = 500
@@ -285,18 +285,34 @@ export interface ResolvePhotosOptions extends RequestOptions {
   nearby?: boolean
 }
 
+/** 埋め込み写真（事前生成データ, v1.3）→ PhotoInfo。幅が詳細用以上なら 960px 版 */
+export function photoInfoFromEmbed(e: EmbeddedPhoto, width: number): PhotoInfo {
+  return {
+    url: width >= PHOTO_WIDTH_DETAIL ? e.url960 : e.url500,
+    ...(e.artist ? { artist: e.artist } : {}),
+    ...(e.license ? { license: e.license } : {}),
+    ...(e.pageUrl ? { pageUrl: e.pageUrl } : {}),
+    ...(e.nearby ? { nearby: true } : {}),
+  }
+}
+
 /**
  * 複数の Place の写真をまとめて解決（BACKLOG A4/Y5）。
+ * 事前生成データに埋め込み済みの写真（photoEmbed）があれば通信せずそのまま使う（v1.3）。
  * 明示 photoUrl → OSM wikimedia_commons/image(Commons のみ) → wikidata P18 → Commons 近傍（公園・展望・寺社・史跡のみ）→ null（UI でカテゴリ別フォールバック）
  * Wikidata / Commons はそれぞれ 50 件単位でバッチ、近傍検索は並列 4。
  */
 export async function resolvePhotos(
-  places: readonly (Pick<Place, 'id' | 'lat' | 'lng' | 'tags' | 'photoUrl'> & Partial<Pick<Place, 'name' | 'category'>>)[],
+  places: readonly (Pick<Place, 'id' | 'lat' | 'lng' | 'tags' | 'photoUrl'> & Partial<Pick<Place, 'name' | 'category' | 'photoEmbed'>>)[],
   { width = PHOTO_WIDTH_LIST, nearby = true, ...opts }: ResolvePhotosOptions = {},
 ): Promise<Map<string, PhotoInfo | null>> {
   const out = new Map<string, PhotoInfo | null>()
   const ck = (id: string) => `${width}|${id}`
   let todo = places.filter((p) => {
+    if (p.photoEmbed?.url500 && p.photoEmbed.url960) {
+      out.set(p.id, photoInfoFromEmbed(p.photoEmbed, width))
+      return false
+    }
     if (p.photoUrl) {
       out.set(p.id, { url: p.photoUrl })
       return false

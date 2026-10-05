@@ -16,7 +16,7 @@ const normName = (s: string) => s.normalize('NFKC').replace(/\s+/g, '').toLowerC
  * 「同名かつ 300m 以内」を 1 件に（同じ公園の複数要素など）。見栄えスコアの高い方を残す。
  * 離れた同名（別の「八幡神社」等）は残す。
  */
-export function dedupeNearby<T extends Pick<Place, 'name' | 'lat' | 'lng' | 'id'> & Partial<Pick<Place, 'tags' | 'photoUrl'>>>(
+export function dedupeNearby<T extends Pick<Place, 'name' | 'lat' | 'lng' | 'id'> & Partial<Pick<Place, 'tags' | 'photoUrl' | 'score'>>>(
   places: readonly T[],
   radiusKm = DEDUPE_RADIUS_KM,
 ): T[] {
@@ -37,8 +37,12 @@ export function dedupeNearby<T extends Pick<Place, 'name' | 'lat' | 'lng' | 'id'
 
 const cmpId = (a: { id: string }, b: { id: string }) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
 
-/** 見栄えスコア（wikidata, 面積, heritage, 写真の手がかり） */
-export function attractiveness(p: Partial<Pick<Place, 'tags' | 'photoUrl'>>): number {
+/**
+ * 見栄えスコア（wikidata, 面積, heritage, 写真の手がかり）。
+ * 事前生成データ（static）は生成時に計算した score（sitelinks・埋め込み写真も加味）を使う。
+ */
+export function attractiveness(p: Partial<Pick<Place, 'tags' | 'photoUrl' | 'score'>>): number {
+  if (typeof p.score === 'number' && Number.isFinite(p.score)) return p.score
   const t = p.tags ?? {}
   let s = 0
   if (p.photoUrl) s += 4
