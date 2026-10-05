@@ -5,6 +5,9 @@ import { mainlandRings, ringsBbox, type GeomWay } from './boundary'
 import { appealScore, dedupePois, mergeSources, osmToDrafts, type PoiDraft } from './merge'
 import { buildIndex, buildTiles } from './output'
 import { attachPhotos, type PhotoSource } from './photos'
+
+/** 写真ファイルのうち、これ未満しかサムネに解決できなければ警告 */
+export const PHOTO_MIN_RESOLVE_RATIO = 0.5
 import type { WikidataItem } from './wikidata'
 
 export interface BuildInput {
@@ -78,6 +81,12 @@ export async function buildDataset(input: BuildInput): Promise<BuildOutput> {
     if (ps.infoFailed) {
       photoStats.warn_commons_imageinfo_failed = ps.infoFailed
       warnings.push(`Commons imageinfo に失敗: ${ps.infoFailed}/${ps.titles} ファイル（写真なしで続行）`)
+    }
+    // 解決率が極端に低いときは応答の解釈がおかしい可能性が高い（v1.3.2 の不具合の再発検知）
+    photoStats.photoResolved = ps.resolved
+    if (ps.titles >= 50 && ps.resolved / ps.titles < PHOTO_MIN_RESOLVE_RATIO) {
+      photoStats.warn_photo_resolve_rate_low = 1
+      warnings.push(`写真の解決率が低い: ${ps.resolved}/${ps.titles}（応答形式の変化などを疑う）`)
     }
     if (ps.nearbyErrors) {
       photoStats.warn_commons_nearby_errors = ps.nearbyErrors

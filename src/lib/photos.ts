@@ -154,24 +154,94 @@ export async function fetchWikidataP18(qids: readonly string[], opts: RequestOpt
   return out
 }
 
+interface ImageInfo {
+  thumburl?: string
+  thumbwidth?: number
+  url?: string
+  width?: number
+  descriptionurl?: string
+  extmetadata?: Record<string, { value?: string }>
+}
 interface ImageInfoPage {
   title?: string
-  imageinfo?: {
-    thumburl?: string
-    url?: string
-    descriptionurl?: string
-    extmetadata?: Record<string, { value?: string }>
-  }[]
+  missing?: string | boolean
+  invalid?: string | boolean
+  imageinfo?: ImageInfo[]
 }
 interface ImageInfoResponse {
-  query?: { normalized?: { from: string; to: string }[]; pages?: Record<string, ImageInfoPage> }
+  query?: { normalized?: { from: string; to: string }[]; redirects?: { from: string; to: string }[]; pages?: Record<string, ImageInfoPage> }
+  continue?: Record<string, string>
 }
 
-function toPhotoInfo(page: ImageInfoPage | undefined): PhotoInfo | null {
+/** Wikimedia のメディア配信ホスト（upload.wikimedia.org ほか *.wikimedia.org）。プロトコル相対 URL は https にする */
+const WIKIMEDIA_MEDIA_RE = /^https:\/\/(?:[a-z0-9-]+\.)*wikimedia\.org\//i
+const IMAGE_EXT_RE = /\.(jpe?g|png|webp)$/i
+
+export function normalizeMediaUrl(raw: string | undefined): string | null {
+  if (!raw) return null
+  const abs = raw.startsWith('//') ? `https:${raw}` : raw
+  if (!WIKIMEDIA_MEDIA_RE.test(abs)) return null
+  // Commons が付ける計測用パラメータ（utm_*）は落とす（それ以外はそのまま）
+  const q = abs.indexOf('?')
+  if (q < 0) return abs
+  const kept = abs
+    .slice(q + 1)
+    .split('&')
+    .filter((kv) => kv && !/^utm_/i.test(kv))
+  return kept.length ? `${abs.slice(0, q)}?${kept.join('&')}` : abs.slice(0, q)
+}
+
+/** MediaWiki の既定: ファイル名が 255 バイトを超えるとサムネ名は "thumbnail.<ext>" になる */
+const THUMB_NAME_ABBREV_BYTES = 255
+
+/**
+ * 原寸 URL からサムネ URL を作る（Commons のサムネ URL 規則）。
+ * https://upload.wikimedia.org/wikipedia/commons/a/ab/Name.jpg → .../commons/thumb/a/ab/Name.jpg/500px-Name.jpg
+ */
+export function commonsThumbUrl(originalUrl: string, width: number): string | null {
+  const m = /^(https:\/\/upload\.wikimedia\.org\/wikipedia\/[^/]+)\/([0-9a-f])\/([0-9a-f]{2})\/([^/?#]+)$/i.exec(originalUrl.split('?')[0])
+  if (!m) return null
+  const [, base, a, ab, name] = m
+  let decoded = name
+  try {
+    decoded = decodeURIComponent(name)
+  } catch {
+    /* そのまま */
+  }
+  const ext = /\.([a-z0-9]+)$/i.exec(decoded)?.[1] ?? ''
+  const thumbName = new TextEncoder().encode(decoded).length > THUMB_NAME_ABBREV_BYTES ? `thumbnail.${ext}` : name
+  return `${base}/thumb/${a}/${ab}/${name}/${width}px-${thumbName}`
+}
+
+/** API の thumburl が「縮小されていない」か（原寸と同じ・unscaled 表示・幅が要求未満で原寸の方が大きい） */
+function isUnscaled(ii: ImageInfo, thumb: string): boolean {
+  if (/utm_content=thumbnail_unscaled/i.test(thumb)) return true
+  const strip = (u: string) => u.split('?')[0]
+  return !!ii.url && strip(thumb) === strip(ii.url)
+}
+
+/**
+ * imageinfo の 1 件 → 指定幅のサムネ URL。
+ * 1) API の thumburl が縮小済みならそれ（プロトコル相対・wikimedia.org の別ホストも許可）
+ * 2) 縮小されていなければ、原寸の幅が要求より大きいときだけ自前でサムネ URL を作る（小さい画像は原寸のまま）
+ */
+export function pickThumbUrl(ii: ImageInfo | undefined, width: number): string | null {
+  if (!ii) return null
+  const original = normalizeMediaUrl(ii.url)
+  const thumb = normalizeMediaUrl(ii.thumburl)
+  if (thumb && ii.thumburl && !isUnscaled(ii, ii.thumburl)) return thumb
+  if (!original) return thumb
+  if (typeof ii.width === 'number' && ii.width > 0 && ii.width <= width) return original
+  return commonsThumbUrl(original, width) ?? thumb ?? original
+}
+
+function toPhotoInfo(page: ImageInfoPage | undefined, width: number): PhotoInfo | null {
   const ii = page?.imageinfo?.[0]
-  const url = ii?.thumburl ?? ii?.url
-  if (!url || !/^https:\/\/upload\.wikimedia\.org\//.test(url)) return null
-  if (!/\.(jpe?g|png|webp)(\/|$|\?)/i.test(url) && !/\.(jpe?g|png|webp)$/i.test(page?.title ?? '')) return null
+  const url = pickThumbUrl(ii, width)
+  if (!url) return null
+  // 形式はファイル名で判定（サムネ URL は .webp 変換や thumbnail.jpg になることがある）
+  const ext = IMAGE_EXT_RE.test(page?.title ?? '') || IMAGE_EXT_RE.test(url.split('?')[0])
+  if (!ext) return null
   return {
     url,
     artist: stripHtml(ii?.extmetadata?.Artist?.value),
@@ -180,29 +250,86 @@ function toPhotoInfo(page: ImageInfoPage | undefined): PhotoInfo | null {
   }
 }
 
-const IMAGEINFO_PARAMS = 'prop=imageinfo&iiprop=url|extmetadata&iiextmetadatafilter=Artist|LicenseShortName&format=json&origin=*'
+const IMAGEINFO_PARAMS = 'prop=imageinfo&iiprop=url|size|extmetadata&iiextmetadatafilter=Artist|LicenseShortName&format=json&origin=*'
 
-/** ファイル名群 → サムネ URL＋作者・ライセンス（最大 50 件/リクエスト） */
+/**
+ * ファイル名の照合キー（v1.3.2）: "File:"/"Image:"/"ファイル:" 接頭辞、%xx、_ と空白、Unicode 正規化（NFC）、先頭の大文字化をそろえる。
+ * Wikidata の P18・OSM のタグ・API の応答の表記ゆれで写真が結び付かないのを防ぐ。
+ */
+export function fileTitleKey(title: string): string {
+  let t = title.trim()
+  if (/%[0-9a-f]{2}/i.test(t)) {
+    try {
+      t = decodeURIComponent(t)
+    } catch {
+      /* そのまま */
+    }
+  }
+  t = t
+    .normalize('NFC')
+    .replace(/^(File|Image|ファイル|画像)\s*:\s*/i, '')
+    .replace(/[_\s]+/g, ' ')
+    .trim()
+  return t ? `File:${t[0].toUpperCase()}${t.slice(1)}` : ''
+}
+
+/** 1 リクエストの URL が長くなりすぎないよう、件数（最大 50）と URL 長（約 6000 文字）で区切る */
+function chunkTitles(titles: readonly string[], maxLen = 6_000): string[][] {
+  const out: string[][] = []
+  let cur: string[] = []
+  let len = 0
+  for (const t of titles) {
+    const l = encodeURIComponent(t).length + 3
+    if (cur.length && (cur.length >= WIKI_BATCH || len + l > maxLen)) {
+      out.push(cur)
+      cur = []
+      len = 0
+    }
+    cur.push(t)
+    len += l
+  }
+  if (cur.length) out.push(cur)
+  return out
+}
+
+/** continue をたどる上限（1 チャンクあたり） */
+const MAX_CONTINUE = 10
+
+/**
+ * ファイル名群 → サムネ URL＋作者・ライセンス（最大 50 件/リクエスト）。
+ * - 結果の Map は、渡されたファイル名そのものをキーにする（表記ゆれは fileTitleKey で吸収）
+ * - Commons に無いファイル → null（写真なし）
+ * - 応答に imageinfo が無かった・通信失敗 → Map に入れない（「写真なし」と区別。呼び出し側で再試行・警告）
+ * - 応答が分割（continue）されたら最後までたどる
+ */
 export async function fetchCommonsImageInfo(
   titles: readonly string[],
   width: number,
   opts: RequestOptions = {},
 ): Promise<Map<string, PhotoInfo | null>> {
-  const uniq = [...new Set(titles)]
+  const byKey = new Map<string, string[]>()
+  for (const t of titles) {
+    const k = fileTitleKey(t)
+    if (!k) continue
+    byKey.set(k, [...(byKey.get(k) ?? []), t])
+  }
   const out = new Map<string, PhotoInfo | null>()
-  for (let i = 0; i < uniq.length; i += WIKI_BATCH) {
-    const chunk = uniq.slice(i, i + WIKI_BATCH)
-    const url = `${COMMONS_API}?action=query&titles=${encodeURIComponent(chunk.join('|'))}&${IMAGEINFO_PARAMS}&iiurlwidth=${width}`
+  for (const chunk of chunkTitles([...byKey.keys()])) {
+    const base = `${COMMONS_API}?action=query&titles=${encodeURIComponent(chunk.join('|'))}&${IMAGEINFO_PARAMS}&iiurlwidth=${width}`
+    let cont: Record<string, string> | undefined
     try {
-      const json = await fetchJson<ImageInfoResponse>(url, undefined, { timeoutMs: 8_000, ...opts })
-      const norm = new Map((json.query?.normalized ?? []).map((n) => [n.to, n.from]))
-      const pages = Object.values(json.query?.pages ?? {})
-      for (const t of chunk) out.set(t, null)
-      for (const page of pages) {
-        if (!page.title) continue
-        const original = norm.get(page.title) ?? page.title
-        out.set(original, toPhotoInfo(page))
-        out.set(page.title, toPhotoInfo(page))
+      for (let n = 0; n < MAX_CONTINUE; n++) {
+        const url = cont ? `${base}&${new URLSearchParams(cont).toString()}` : base
+        const json = await fetchJson<ImageInfoResponse>(url, undefined, { timeoutMs: 8_000, ...opts })
+        for (const page of Object.values(json.query?.pages ?? {})) {
+          if (!page.title) continue
+          const key = fileTitleKey(page.title)
+          const info = page.missing !== undefined || page.invalid !== undefined ? null : page.imageinfo?.length ? toPhotoInfo(page, width) : undefined
+          if (info === undefined) continue // imageinfo が来ていない（continue の続きで来るかもしれない）
+          for (const original of byKey.get(key) ?? []) if (!out.has(original) || out.get(original) === null) out.set(original, info)
+        }
+        cont = json.continue
+        if (!cont) break
       }
     } catch (e) {
       if (opts.signal?.aborted) throw e
@@ -246,7 +373,7 @@ export async function commonsNearbyOrThrow(
   const pages = Object.values(json.query?.pages ?? {}).sort(
     (a, b) => ((a as { index?: number }).index ?? 0) - ((b as { index?: number }).index ?? 0),
   )
-  const usable = pages.map((page) => ({ page, info: toPhotoInfo(page) })).filter((x) => x.info)
+  const usable = pages.map((page) => ({ page, info: toPhotoInfo(page, width) })).filter((x) => x.info)
   const named = p.name ? usable.find((x) => titleMatchesName(x.page.title ?? '', p.name!)) : undefined
   const chosen = named ?? usable[0]
   return chosen?.info ? { ...chosen.info, nearby: true } : null

@@ -79,7 +79,14 @@ export async function attachPhotos(
   const titles = [...new Set(titleOf.values())]
   log(`photos: resolving ${titles.length} Commons files (imageinfo ×2 widths)`)
   const small = titles.length ? await safeInfo(source, titles, PHOTO_WIDTH_LIST, log) : new Map<string, PhotoInfo | null>()
-  const large = titles.length ? await safeInfo(source, titles, PHOTO_WIDTH_DETAIL, log) : new Map<string, PhotoInfo | null>()
+  // 応答に imageinfo が無かった・失敗したファイルは 1 回だけ取り直す（v1.3.2）
+  const retry = titles.filter((t) => !small.has(t))
+  if (retry.length) {
+    log(`photos: retrying ${retry.length} unresolved files`)
+    for (const [k, v] of await safeInfo(source, retry, PHOTO_WIDTH_LIST, log)) small.set(k, v)
+  }
+  const want = titles.filter((t) => small.get(t))
+  const large = want.length ? await safeInfo(source, want, PHOTO_WIDTH_DETAIL, log) : new Map<string, PhotoInfo | null>()
   const infoFailed = titles.filter((t) => !small.has(t)).length
   let resolved = 0
   for (const d of pois) {
@@ -121,5 +128,6 @@ export async function attachPhotos(
   }
   if (candidates.length) log(`photos: nearby ${nearbyFound}/${nearbyTried} (errors ${nearbyErrors})`)
   if (infoFailed) log(`photos: imageinfo failed for ${infoFailed}/${titles.length} files`)
+  log(`photos: ${resolved}/${titles.length} files resolved to thumbnails`)
   return { titles: titles.length, resolved, infoFailed, nearbyTried, nearbyFound, nearbyErrors, nearbyAborted }
 }

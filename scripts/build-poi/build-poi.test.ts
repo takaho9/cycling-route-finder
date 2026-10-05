@@ -147,7 +147,7 @@ describe('buildDataset (fixture end to end)', () => {
       pageUrl: 'https://commons.wikimedia.org/wiki/File:Hibiya_Park.jpg',
     })
     expect(pois.find((p) => p.name === '浅草寺')!.photo?.license).toBe('CC BY 4.0')
-    expect(calls.filter((c) => c.startsWith('info:'))).toEqual(['info:500:3', 'info:960:3'])
+    expect(calls.filter((c) => c.startsWith('info:'))).toEqual(['info:500:3', 'info:960:2']) // 960px は写真のあるファイルだけ
     // 近傍検索は上限 2 件・公園/展望/寺社/史跡のみ
     expect(calls.filter((c) => c.startsWith('nearby:'))).toHaveLength(2)
 
