@@ -157,6 +157,12 @@ console.log('\n## 受け入れ基準（BACKLOG-3）')
 console.log('| 基準 | 結果 | 目標 | 判定 |')
 console.log('|---|---|---|---|')
 for (const c of criteria) console.log(`| ${c.name} | ${c.value} | ${c.target} | ${c.ok ? 'OK' : 'NG'} |`)
+{
+  const byKind = new Map<string, number>()
+  for (const [, v] of badList) byKind.set(v.kind, (byKind.get(v.kind) ?? 0) + 1)
+  console.log(`\n内訳: ${['付属建物名', '汎用名', '動物名', '目的地でない'].map((k) => `${k} ${byKind.get(k) ?? 0}`).join(' / ')}`)
+  console.log('（汎用名は事前生成の Q1 = Wikidata ラベル・市区町村名で直る。生成済みタイルへの後処理では計測対象外）')
+}
 if (badList.length) {
   console.log('\n出してはいけない名前:')
   for (const [k, v] of badList) console.log(`  - [${v.kind}] ${k.split('|')[0]} … ${[...v.where].join(', ')}`)

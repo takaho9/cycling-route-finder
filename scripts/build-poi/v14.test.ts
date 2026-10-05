@@ -117,9 +117,10 @@ describe('Q2 / Q3 / Q6 / Q9 / Q11 quality', () => {
       d('osm:node/5', '公園内の記念館', 'historic', { lat: 35.599, lng: 139.599, tags: { wikidata: 'Q5' } }),
       d('osm:way/6', '神社', 'shrine', { lat: 35.65, lng: 139.65, extent: { minlat: 35.649, minlon: 139.649, maxlat: 35.651, maxlon: 139.651 } }),
       d('osm:node/7', '神社の資料館', 'museum', { lat: 35.6501, lng: 139.6501 }),
+      d('osm:node/8', '招福猫児奉納所', 'attraction', { lat: 35.6502, lng: 139.6502 }),
     ])
     expect(pois.map((p) => p.id)).toEqual(['osm:way/1', 'osm:way/3', 'osm:node/5', 'osm:way/6'])
-    expect(stats.absorbed).toBe(3)
+    expect(stats.absorbed).toBe(4)
   })
 
   it('Q6: within 60m and a similar name → one place even across categories', () => {

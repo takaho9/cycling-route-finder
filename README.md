@@ -70,6 +70,8 @@ npm run screenshots  # docs/screenshots/ を撮り直す（要: npm run build、
 - 健全性チェック: 最低件数（3000）と前回比 -30% 以上の減少で失敗（commit しない）。
 - 手元では外部に出ずに fixture から作れます: `npm run build:data:sample`（東京駅周辺のサンプル。`"sample": true` でアプリはデモ扱いで表示）。
 - 一度読んだタイルは Service Worker（StaleWhileRevalidate）が持つので、オフラインでも使えます（precache はしない）。
+- 提案品質のシミュレーション: `npm run sim`（新宿・吉祥寺・錦糸町・二子玉川・八王子 × 30/60/90 分で、おすすめと候補を出し、`docs/BACKLOG-3.md` の受け入れ基準を集計）。`npm run sim -- --data <dir>` で別データ、`--verbose` で全候補。
+- 生成済みタイルに品質ルールの一部だけを当てて見積もる: `npx tsx scripts/reapply-quality.mts --out <dir>`（再生成前の確認用）。
 
 ## 使用 API とクレジット
 

@@ -59,7 +59,9 @@ function parentKind(d: PoiDraft): ParentKind | null {
 
 function absorbs(parent: PoiDraft, child: PoiDraft): boolean {
   const kind = parentKind(parent)
-  if (kind === 'precinct') return (child.category === 'shrine' && child.id.startsWith('osm:node/')) || child.category === 'museum'
+  // 境内: 中の寺社 node、資料館、奉納所などの見どころ・史跡・池（v1.4 Q6）
+  if (kind === 'precinct')
+    return (child.category === 'shrine' && child.id.startsWith('osm:node/')) || ['museum', 'attraction', 'historic', 'waterside'].includes(child.category)
   if (kind === 'zoo' || kind === 'park') return ['attraction', 'waterside', 'historic'].includes(child.category) && !parentKind(child)
   return false
 }
