@@ -74,6 +74,8 @@ export async function buildDataset(input: BuildInput): Promise<BuildOutput> {
   const tiles = buildTiles(pois)
   const byCat: Record<string, number> = {}
   for (const d of pois) byCat[`cat_${d.category}`] = (byCat[`cat_${d.category}`] ?? 0) + 1
+  // Wikidata のクラス別件数（ホワイトリストの QID が効いているかの確認用）
+  for (const w of input.wikidata) byCat[`wd_${w.classQid}`] = (byCat[`wd_${w.classQid}`] ?? 0) + 1
   const index = buildIndex({
     tiles,
     coverage,
