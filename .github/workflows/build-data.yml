@@ -1,0 +1,105 @@
+# 都内（島しょ部を除く）の目的地データを事前生成して public/data/tokyo に commit し、Pages にデプロイする（v1.3）。
+# - Overpass（OSM）・Wikidata SPARQL・Wikimedia Commons を CI から叩く。User-Agent に連絡先（このリポジトリの Issues）を明記。
+# - 健全性チェック（最低件数・前回比 -30%）に落ちたら commit しない（失敗データを公開しない）。
+# - GITHUB_TOKEN の push では deploy.yml の push トリガーが起動しないので、同じワークフローから deploy.yml を workflow_call で呼ぶ。
+name: Build Tokyo POI data
+
+on:
+  schedule:
+    # 毎週月曜 04:17 JST（= 日曜 19:17 UTC）。混む毎時 0 分は避ける
+    - cron: '17 19 * * 0'
+  workflow_dispatch:
+    inputs:
+      nearby_limit:
+        description: 'Commons 近傍検索の上限件数（0 で無効）'
+        type: string
+        default: '300'
+      no_photos:
+        description: '写真の解決をしない（Commons を叩かない）'
+        type: boolean
+        default: false
+      allow_shrink:
+        description: '前回比 -30% の健全性チェックを無効にする（意図的に件数を減らすときだけ）'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-data
+  cancel-in-progress: false
+
+jobs:
+  data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    outputs:
+      changed: ${{ steps.commit.outputs.changed }}
+      sha: ${{ steps.commit.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Test the generator (fixtures)
+        run: npx vitest run scripts
+
+      - name: Build data (Overpass + Wikidata + Commons)
+        env:
+          POI_CONTACT: ${{ github.server_url }}/${{ github.repository }}/issues
+          NEARBY_LIMIT: ${{ inputs.nearby_limit || '300' }}
+          NO_PHOTOS: ${{ inputs.no_photos && '--no-photos' || '' }}
+          ALLOW_SHRINK: ${{ inputs.allow_shrink && '--allow-shrink' || '' }}
+        run: npx tsx scripts/build-poi/main.ts --out public/data/tokyo --nearby-limit "$NEARBY_LIMIT" $NO_PHOTOS $ALLOW_SHRINK
+
+      - name: Summary
+        if: always()
+        run: |
+          if [ -f public/data/tokyo/index.json ]; then
+            node -e '
+              const i = require("./public/data/tokyo/index.json");
+              const s = [`## Tokyo POI data`, ``, `- version: ${i.version}${i.sample ? " (sample)" : ""}`, `- generatedAt: ${i.generatedAt}`,
+                `- places: ${i.count} / tiles: ${Object.keys(i.tiles).length} / ${(i.bytes/1024/1024).toFixed(2)} MiB`, ``, "```json", JSON.stringify(i.stats, null, 1), "```"];
+              require("fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY, s.join("\n") + "\n");
+            '
+          fi
+
+      - name: Commit and push to main
+        id: commit
+        run: |
+          if [ -z "$(git status --porcelain -- public/data/tokyo)" ]; then
+            echo "No data changes."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A public/data/tokyo
+          version=$(node -p 'require("./public/data/tokyo/index.json").version')
+          count=$(node -p 'require("./public/data/tokyo/index.json").count')
+          git commit -m "data: update Tokyo POI data (${count} places, ${version})"
+          git pull --rebase origin main
+          git push origin HEAD:main
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: data
+    if: needs.data.outputs.changed == 'true'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/deploy.yml
+    with:
+      ref: ${{ needs.data.outputs.sha }}

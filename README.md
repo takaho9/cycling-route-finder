@@ -58,13 +58,23 @@ npm run screenshots  # docs/screenshots/ を撮り直す（要: npm run build、
 - リポジトリの Settings → Pages → Source を「GitHub Actions」にしてください。
 - サブパス以外で配信する場合は `BASE_PATH` を変えるだけです（既定は `/`）。manifest の `start_url` / `scope` は相対 `./` なのでどの base でも動きます。
 
+## 都内の行き先データ（事前生成, v1.3）
+
+出発地が都内（島しょ部を除く）のときは、ブラウザから Overpass を叩かず、事前に生成した静的 JSON（`public/data/tokyo/`）を読みます。都外・データ取得失敗のときは従来どおり Overpass（＋端末内キャッシュ）にフォールバックします。
+
+- 生成: `.github/workflows/build-data.yml`（毎週月曜 04:17 JST ＋ 手動実行）が `scripts/build-poi/`（Overpass 1 回・Wikidata SPARQL・Commons imageinfo）を実行し、差分があれば `main` に commit して、`deploy.yml` を `workflow_call` で呼んでデプロイします。
+- 形式: 0.05° グリッドのタイル `t_<lat×100>_<lng×100>.json` と `index.json`（タイル一覧・件数・生成日時・データ源・対象範囲ポリゴン）。形式の定義は `src/lib/places/staticData.ts`。
+- 健全性チェック: 最低件数（3000）と前回比 -30% 以上の減少で失敗（commit しない）。
+- 手元では外部に出ずに fixture から作れます: `npm run build:data:sample`（東京駅周辺のサンプル。`"sample": true` でアプリはデモ扱いで表示）。
+- 一度読んだタイルは Service Worker（StaleWhileRevalidate）が持つので、オフラインでも使えます（precache はしない）。
+
 ## 使用 API とクレジット
 
 ランニングコスト 0 で動くよう、API キー不要の無料公開 API だけを使っています。検索結果は端末内にキャッシュし（7日）、経路は詳細を開いたときだけ取得するなど、アクセスは最小限にしています。
 
 | 用途 | API | クレジット / ライセンス |
 |---|---|---|
-| 行き先（POI） | [Overpass API](https://wiki.openstreetmap.org/wiki/Overpass_API)（overpass-api.de ほか） | © OpenStreetMap contributors（ODbL） |
+| 行き先（POI） | 都内: 事前生成データ（OSM + Wikidata + Commons, GitHub Actions で週 1 回）/ 都外: [Overpass API](https://wiki.openstreetmap.org/wiki/Overpass_API)（overpass-api.de ほか） | © OpenStreetMap contributors（ODbL。事前生成データも ODbL）/ Wikidata（CC0） |
 | 標高 | [Open-Meteo Elevation API](https://open-meteo.com/en/docs/elevation-api) | Elevation data: Open-Meteo（CC BY 4.0） |
 | 経路（自転車） | [routing.openstreetmap.de](https://routing.openstreetmap.de/)（OSRM） | Routing: FOSSGIS e.V. / © OpenStreetMap contributors |
 | 写真 | [Wikidata](https://www.wikidata.org/)（Query Service で P18 のみ）/ [Wikimedia Commons](https://commons.wikimedia.org/) | 写真ごとに作者・ライセンスを表示（近くで撮られた写真は「付近の写真」） |
@@ -81,6 +91,6 @@ npm run screenshots  # docs/screenshots/ を撮り直す（要: npm run build、
 ## プライバシー
 
 - アカウント・サーバー・解析ツール・広告はありません。
-- 位置情報は端末の中で使い、候補さがしに必要なぶんだけ**丸めた座標**を上記の公開 API に送ります（Overpass は約 1km 単位のグリッド、標高・経路は約 11m 単位、地名の逆引きは約 100m 単位）。
+- 位置情報は端末の中で使い、候補さがしに必要なぶんだけ**丸めた座標**を上記の公開 API に送ります（Overpass は出発地が都外のときだけ・約 1km 単位のグリッド、標高・経路は約 11m 単位、地名の逆引きは約 100m 単位）。
 - Google マップには、出発ボタンを押したときだけ目的地（往復のとき・出発地を手動で選んだときは出発地も）を URL で渡します。
 - 走った記録・お気に入り・設定・検索キャッシュはこの端末（localStorage / IndexedDB）にだけ保存されます。ブラウザのサイトデータを消すと削除されます。

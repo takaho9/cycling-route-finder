@@ -5,6 +5,14 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  # build-data.yml（都内データの週次生成）から呼ぶ。GITHUB_TOKEN の push では push トリガーが起動しないため（v1.3）
+  workflow_call:
+    inputs:
+      ref:
+        description: 'デプロイするコミット（省略時はトリガーのコミット）'
+        type: string
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -20,6 +28,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # workflow_call では呼び出し元が push したデータ更新コミットを指定する。push / 手動実行では従来どおり
+          ref: ${{ inputs.ref || github.sha }}
 
       - uses: actions/setup-node@v4
         with:
