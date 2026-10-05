@@ -72,11 +72,10 @@
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  flex-wrap: wrap;
-  justify-content: center;
   max-width: 100%;
   margin-top: 2px;
   font-size: 11px;
+  white-space: nowrap;
   font-weight: 600;
 }
 .stats > .route-pill {

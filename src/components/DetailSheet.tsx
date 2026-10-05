@@ -198,7 +198,7 @@ export function DetailSheet({
               <ElevationIcon label={elev.label} size={12} />
               {round ? (
                 <>
-                  片道 <span className="num">+{trip.climbM}m</span> · {text.long}
+                  片道 <span className="num">+{trip.climbM}m</span> · {text.short}
                 </>
               ) : (
                 text.long

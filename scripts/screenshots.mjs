@@ -109,8 +109,11 @@ async function run() {
       await page.locator('.filters').waitFor()
       await page.evaluate(() => {
         const el = document.querySelector('.more__title')
-        window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 64 })
+        window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 40 })
       })
+      await wait(300)
+      // 少し上に戻す: 上スクロールで FAB が出る（BACKLOG-2 D4）
+      await page.evaluate(() => window.scrollBy({ top: -24 }))
       await wait(800)
       await shot('03', 'list')
 

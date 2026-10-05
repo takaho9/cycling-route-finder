@@ -194,13 +194,22 @@
   font-size: 20px;
 }
 .return-card__title {
-  overflow: hidden;
-  font-size: var(--fs-sub);
-  line-height: 1.35;
+  display: grid;
+  min-width: 0;
+  font-size: var(--fs-body);
+  line-height: 1.3;
   font-weight: 700;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+}
+.return-card__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.return-card__ask {
+  color: var(--c-text-sub);
+  font-size: var(--fs-caption);
+  font-weight: 500;
 }
 .return-card__yes {
   min-height: 40px;

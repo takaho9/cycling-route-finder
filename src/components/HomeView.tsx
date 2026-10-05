@@ -75,6 +75,7 @@ export function HomeView({
         <h1 className="home__title">今日は どこまで行く？</h1>
         {firstRun && <p className="home__lead">時間をえらぶだけ。あとは漕ぎだそう。</p>}
       </div>
+      {/* 出発地が未確定のときは案内カードを優先し、レンジは出さない（ダイヤルを CTA の上に収めるため） */}
       {!needsOrigin && (
         <div className="home__reach-art">
           <ReachRings index={index} max={ROUND_TRIP_MINUTES.length - 1} categories={categories} />

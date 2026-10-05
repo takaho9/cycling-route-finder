@@ -12,7 +12,9 @@ export function ReturnCard({ departure, onYes, onNo }: { departure: Departure; o
         {emoji}
       </span>
       <h2 id={titleId} className="return-card__title">
-        <span className="return-card__name">{departure.name}</span>、行ってきた？
+        <span className="return-card__name">{departure.name}</span>
+        <span className="visually-hidden">、</span>
+        <span className="return-card__ask">行ってきた？</span>
       </h2>
       <button type="button" className="btn btn--primary return-card__yes pressable" onClick={onYes}>
         ✓ 走った
