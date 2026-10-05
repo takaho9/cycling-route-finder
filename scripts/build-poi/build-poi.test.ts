@@ -131,7 +131,8 @@ describe('buildDataset (fixture end to end)', () => {
     // 同じ QID の way/node → 1 件、200m の同名 → 1 件、同名カフェ 120m → 1 件、範囲外カフェは落ちる
     expect(names.filter((n) => n === '日比谷公園')).toHaveLength(1)
     expect(names.filter((n) => n === '愛宕神社')).toHaveLength(1)
-    expect(names.filter((n) => n === '東京大神宮')).toHaveLength(2)
+    // 500m 離れた同名は別物だが、OSM 側は wikidata の無い単独 node の寺社なので除外（v1.3.2 ルール A）
+    expect(names.filter((n) => n === '東京大神宮')).toHaveLength(1)
     expect(names.filter((n) => n.startsWith('喫茶'))).toHaveLength(1)
     expect(names).not.toContain('範囲外カフェ')
     expect(pois.find((p) => p.name === '日比谷公園')!.id).toBe('osm:way/101') // 面積のある way が残る

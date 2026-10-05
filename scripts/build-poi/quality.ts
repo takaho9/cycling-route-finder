@@ -5,7 +5,7 @@
  * 1. 境内の吸収: 大きな寺社（way/relation）の範囲内にある寺社 node（wikidata なし）は親に吸収する
  * 2. チェーンの自動判定: 同じ名前のカフェ・パン・甘味が都内に 5 件以上 → チェーンとして除外
  * 3. 名前ルールを Wikidata だけの項目にも当てる（OSM 側は isWorthVisiting で済んでいる）
- * 4. 小さな寺社（単独 node・wikidata も heritage も無し）はスコアを下げる
+ * 4. 小さな寺社（単独 node・wikidata も heritage も無し）は除外する（PdM 判断 A。境内を持つ way/relation は残す）
  */
 import { haversineKm } from '../../src/lib/geo'
 import { isChainName, isWorshipPartName, normalizeForMatch } from '../../src/lib/places/quality'
@@ -47,7 +47,7 @@ function inside(p: { lat: number; lng: number }, parent: PoiDraft): boolean {
   return haversineKm(p, parent) <= PRECINCT_FALLBACK_KM
 }
 
-/** 1〜3 を適用（破壊的ではない）。4 は scoreWithQuality で */
+/** 1〜4 を適用 */
 export function applyQualityRules(pois: readonly PoiDraft[], { autoChainMin = AUTO_CHAIN_MIN_COUNT } = {}): { pois: PoiDraft[]; stats: QualityStats } {
   const stats: QualityStats = { chainByName: 0, chainAuto: 0, autoChainNames: [], worshipPart: 0, absorbed: 0, minorWorship: 0 }
   // 3. 名前ルール（Wikidata だけの項目にも）
@@ -91,11 +91,13 @@ export function applyQualityRules(pois: readonly PoiDraft[], { autoChainMin = AU
     if (d.tags.heritage && !parent.tags.heritage) parent.tags.heritage = d.tags.heritage
     return false
   })
+  // 4. 単独 node の小さな寺社は除外（境内に吸収されなかった残り）
   stats.minorWorship = out.filter(isMinorWorship).length
+  out = out.filter((d) => !isMinorWorship(d))
   return { pois: out, stats }
 }
 
-/** 4. 小さな寺社の減点を足したスコア */
+/** 小さな寺社の減点（4 で除外済みなので通常は 0。ルールを緩めたとき用に残す） */
 export function qualityPenalty(d: PoiDraft): number {
   return isMinorWorship(d) ? MINOR_WORSHIP_PENALTY : 0
 }

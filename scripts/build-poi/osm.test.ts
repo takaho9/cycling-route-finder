@@ -92,7 +92,8 @@ describe('GeoJSON Seq (osmium export) → Overpass-shaped elements', () => {
       generatedAt: 'x',
     })
     const names = pois.map((p) => p.name).sort()
-    expect(names).toEqual(['KITTEガーデン', '喫茶テスト', '大きな神社', '日枝神社', '日比谷公園', '東京国立博物館', '浜離宮恩賜庭園'].sort())
+    // 「大きな神社」は wikidata も heritage も無い単独 node の寺社なので除外（v1.3.2 ルール A）
+    expect(names).toEqual(['KITTEガーデン', '喫茶テスト', '日枝神社', '日比谷公園', '東京国立博物館', '浜離宮恩賜庭園'].sort())
     // 小さな公園（isWorthVisiting）・川崎（境界の外）は落ちる。浜離宮は「浜」だけでは海辺にしない（v1.3.2）
     expect(pois.find((p) => p.name === '浜離宮恩賜庭園')).toMatchObject({ category: 'park', tags: { size_m: expect.any(String) } })
   })
@@ -135,7 +136,7 @@ describe.skipIf(!HAS_OSMIUM)('osmium (real binary, small .osm fixture)', () => {
       encoding: 'utf8',
     })
     const index = JSON.parse(readFileSync(join(out, 'index.json'), 'utf8')) as StaticIndex
-    expect(index.count).toBe(7)
+    expect(index.count).toBe(6)
     expect(index.coverage.rings).toHaveLength(1)
     expect(index.osm).toEqual({ source: 'fixture' })
   }, 30_000)
@@ -280,7 +281,7 @@ describe('Commons failure handling', () => {
     expect(pois.every((p) => !p.photo)).toBe(true)
     expect(index.stats?.warn_commons_imageinfo_failed).toBe(1)
     expect(index.warnings?.[0]).toMatch(/Commons imageinfo に失敗: 1\/1/)
-    expect(index.count).toBe(7)
+    expect(index.count).toBe(6)
   })
 
   it('nearby search stops after consecutive errors (does not hammer a down Commons)', async () => {

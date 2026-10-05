@@ -24,7 +24,7 @@ describe('applyQualityRules (generator only, v1.3.2)', () => {
       d('osm:node/4', '浅草神社', 'shrine', { lat: 35.7155, lng: 139.7975, tags: { wikidata: 'Q9' } }),
       d('osm:node/5', '待乳山聖天', 'shrine', { lat: 35.718, lng: 139.802 }), // 境内の外
     ])
-    expect(pois.map((p) => p.id)).toEqual(['osm:way/1', 'osm:node/4', 'osm:node/5'])
+    expect(pois.map((p) => p.id)).toEqual(['osm:way/1', 'osm:node/4']) // node/5 は境外の小さな寺社（A で除外）
     expect(stats.absorbed).toBe(1) // node/2 は名前（〜祠）、node/3 は吸収（heritage を親へ）
     expect(stats.worshipPart).toBe(1)
     expect(precinct.tags.heritage).toBe('2')
@@ -36,12 +36,12 @@ describe('applyQualityRules (generator only, v1.3.2)', () => {
       d('osm:node/2', '氷川神社 拝殿前', 'shrine', { lat: 35.7002 }), // 22m
       d('osm:node/3', '八幡神社', 'shrine', { lat: 35.701 }), // 110m
     ])
-    expect(pois.map((p) => p.id)).toEqual(['osm:way/1', 'osm:node/3'])
+    expect(pois.map((p) => p.id)).toEqual(['osm:way/1']) // node/3 は境外だが単独の小さな寺社なので除外（A）
   })
 
   it(`treats the same shop name ${AUTO_CHAIN_MIN_COUNT}+ times in Tokyo as a chain (cafes/bakeries/sweets only)`, () => {
     const many = (name: string, n: number, cat: PoiDraft['category']) =>
-      Array.from({ length: n }, (_, i) => d(`osm:node/${name}${i}`, `${name} ${['新宿店', '渋谷店', '池袋店', '上野店', '品川店', '目黒店'][i]}`, cat))
+      Array.from({ length: n }, (_, i) => d(`osm:${cat === 'shrine' ? 'way' : 'node'}/${name}${i}`, `${name} ${['新宿店', '渋谷店', '池袋店', '上野店', '品川店', '目黒店'][i]}`, cat))
     const { pois, stats } = applyQualityRules([
       ...many('やなか珈琲店', 5, 'cafe'),
       ...many('喫茶ひだまり', 4, 'cafe'),
@@ -63,7 +63,19 @@ describe('applyQualityRules (generator only, v1.3.2)', () => {
     expect(shopBaseName('ＣＯＬＯＲＡＤＯ 上野店')).toBe('colorado')
   })
 
-  it('small standalone worship nodes (no wikidata / heritage) are demoted', () => {
+  it('PdM rule A: standalone worship nodes without wikidata / heritage are dropped; precincts and notable nodes stay', () => {
+    const { pois, stats } = applyQualityRules([
+      d('osm:node/1', '稲荷神社', 'shrine', { lat: 35.75 }),
+      d('osm:way/2', '八幡神社', 'shrine'),
+      d('osm:node/3', '湯島天満宮', 'shrine', { lat: 35.76, tags: { wikidata: 'Q1' } }),
+      d('osm:node/4', '庚申塔', 'shrine', { lat: 35.77, tags: { heritage: '2' } }),
+      d('osm:node/5', '喫茶店', 'cafe', { lat: 35.78 }),
+    ])
+    expect(pois.map((p) => p.id)).toEqual(['osm:way/2', 'osm:node/3', 'osm:node/4', 'osm:node/5'])
+    expect(stats.minorWorship).toBe(1)
+  })
+
+  it('isMinorWorship / penalty helpers', () => {
     const small = d('osm:node/1', '稲荷神社', 'shrine')
     const big = d('osm:way/2', '稲荷神社', 'shrine')
     expect(isMinorWorship(small)).toBe(true)

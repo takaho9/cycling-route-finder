@@ -75,7 +75,7 @@ export async function buildDataset(input: BuildInput): Promise<BuildOutput> {
   pois = q.pois
   log(
     `quality: chain by name ${q.stats.chainByName}, auto chain ${q.stats.chainAuto} (${q.stats.autoChainNames.length} names), ` +
-      `worship parts ${q.stats.worshipPart}, absorbed ${q.stats.absorbed}, minor worship (demoted) ${q.stats.minorWorship}`,
+      `worship parts ${q.stats.worshipPart}, absorbed ${q.stats.absorbed}, minor worship nodes dropped ${q.stats.minorWorship}`,
   )
   if (q.stats.autoChainNames.length) log(`quality: auto chains: ${q.stats.autoChainNames.slice(0, 40).join(', ')}`)
   const score = (d: PoiDraft) => Math.round((appealScore(d) - qualityPenalty(d)) * 10) / 10

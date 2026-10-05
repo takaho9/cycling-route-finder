@@ -120,15 +120,17 @@
    }
   },
   {
-   "type": "node",
+   "type": "way",
    "id": 111,
-   "lat": 35.71476,
-   "lon": 139.79666,
    "tags": {
     "name": "浅草寺",
     "amenity": "place_of_worship",
     "religion": "buddhist",
     "wikimedia_commons": "File:Sensoji.jpg"
+   },
+   "center": {
+    "lat": 35.71476,
+    "lon": 139.79666
    }
   },
   {
