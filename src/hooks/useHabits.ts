@@ -45,7 +45,8 @@ export function useHabits(weeklyGoal: number, now: () => Date = systemNow, nowDa
   const [favorites, setFavorites] = useState<FavoritePlace[]>(() => loadFavorites())
   const [departure, setDeparture] = useState<Departure | null>(() => {
     const d = loadDeparture()
-    if (isDepartureExpired(d)) {
+    // 注入された「いま」で判定する（実時刻 new Date() だと now 注入時に誤って消える）
+    if (isDepartureExpired(d, nowDate)) {
       clearDeparture()
       return null
     }
